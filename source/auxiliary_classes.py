@@ -69,7 +69,7 @@ class EquationCoefficientHandler():
 
     def __str__(self):
         assert hasattr(self, "_dimensionless_numbers")
-        
+
         def add_row(string, *args):
             width = 65
             widths = (32, 32)
@@ -82,9 +82,9 @@ class EquationCoefficientHandler():
             else:
                 raise RuntimeError()
             return string
-                
+
         string = "+" + 65 * "-" + "+\n"
-        
+
         string = add_row(string, "dimensionless numbers")
         string = add_row(string)
         string = add_row(string, "name", "value")
@@ -118,7 +118,7 @@ class EquationCoefficientHandler():
             string = add_row(string)
 
             coefficient_expressions = dict()
-            
+
             if not any(x in self._dimensionless_numbers for x in ("L", "M", "N", "Th")):
                 if ("Ro" not in self._dimensionless_numbers) and \
                         ("Ek" not in self._dimensionless_numbers):
@@ -174,16 +174,16 @@ class EquationCoefficientHandler():
 
     def _compute_equation_coefficients(self):
         assert hasattr(self, "_dimensionless_numbers")
-        
+
         if not any(x in self._dimensionless_numbers for x in ("L", "M", "N", "Th")):
 
             if not hasattr(self, "_equation_coefficients"):
                 self._equation_coefficients = dict()
             self._equation_coefficients["momentum"] = dict()
             coefficients = self._equation_coefficients["momentum"]
-        
+
             coefficients["convective_term"] = 1.0
-        
+
             if "Ro" not in self._dimensionless_numbers and \
                     "Ek" not in self._dimensionless_numbers:
                 coefficients["coriolis_term"] = None
@@ -228,36 +228,36 @@ class EquationCoefficientHandler():
                 coefficients["body_force_term"] = None
         else:
             assert all(x not in self._dimensionless_numbers for x in ("Ek", "Ro"))
-            
+
             if not hasattr(self, "_equation_coefficients"):
                 self._equation_coefficients = dict()
-            
+
             self._equation_coefficients["momentum"] = dict()
             self._equation_coefficients["spin"] = dict()
-            
+
             momentum_coefficients = self._equation_coefficients["momentum"]
             momentum_coefficients["convective_term"] = 1.0
             momentum_coefficients["coriolis_term"] = None
             momentum_coefficients["euler_term"] = None
             momentum_coefficients["pressure_term"] = 1.0
             if "Re" in self._dimensionless_numbers:
-                momentum_coefficients["viscous_term"] = 1.0 /  (1.0 - self._dimensionless_numbers["N"]**2) / \
+                momentum_coefficients["viscous_term"] = 1.0 / (1.0 - self._dimensionless_numbers["N"]**2) / \
                                                         self._dimensionless_numbers["Re"]
             else:  # pragma: no cover
                 raise RuntimeError()
             momentum_coefficients["coupling_term"] = self._dimensionless_numbers["N"]**2 / \
-                                                     (1.0 - self._dimensionless_numbers["N"]**2)
+                (1.0 - self._dimensionless_numbers["N"]**2)
 
             spin_coefficients = self._equation_coefficients["spin"]
             spin_coefficients["convective_term"] = 1.0
             if all(x in self._dimensionless_numbers for x in ("Re", "L", "Th")):
-                spin_coefficients["viscous_term"] = 1.0 /  self._dimensionless_numbers["L"]**2 / \
+                spin_coefficients["viscous_term"] = 1.0 / self._dimensionless_numbers["L"]**2 / \
                                                     self._dimensionless_numbers["Re"] / \
                                                     self._dimensionless_numbers["Th"]
             else:  # pragma: no cover
                 raise RuntimeError()
             if all(x in self._dimensionless_numbers for x in ("Re", "M", "Th")):
-                spin_coefficients["vol_viscous_term"] = 1.0 /  self._dimensionless_numbers["M"]**2 / \
+                spin_coefficients["vol_viscous_term"] = 1.0 / self._dimensionless_numbers["M"]**2 / \
                                                         self._dimensionless_numbers["Re"] / \
                                                         self._dimensionless_numbers["Th"]
             spin_coefficients["coupling_term"] = momentum_coefficients["coupling_term"]
@@ -398,7 +398,6 @@ class EquationCoefficientHandler():
             raise RuntimeError("Unknown non-dimenional form.")
         assert value < 1.0, "Parameter N must be less than unity."
         self._set_dimensionless_number("N", value)
-
 
     @property
     def Th(self):
