@@ -61,139 +61,206 @@ class EquationCoefficientHandler():
         self._read_dimensionless_number(kwargs, "Fr", "Froude")
         self._read_dimensionless_number(kwargs, "Ro", "Rossby")
         self._read_dimensionless_number(kwargs, "Ek", "Ekman")
+        self._read_dimensionless_number(kwargs, "L", "L")
+        self._read_dimensionless_number(kwargs, "M", "M")
+        self._read_dimensionless_number(kwargs, "N", "Coupling number")
+        self._read_dimensionless_number(kwargs, "Th", "Inertia number")
         self._closed = False
 
     def __str__(self):
         assert hasattr(self, "_dimensionless_numbers")
-        string = "+" + 41 * "-" + "+\n"
-        string += "|" + "{:^41}".format("dimensionless numbers") + "|\n"
-        string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
-        string += "|" + "{:^15}".format("name") + "|" + "{:^25}".format("value") + "|\n"
-        string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
+        
+        def add_row(string, *args):
+            width = 65
+            widths = (32, 32)
+            if len(args) == 0:
+                string += "+" + widths[0] * "-" + "+" + widths[1] * "-" + "+\n"
+            elif len(args) == 1:
+                string += "|" + f" {args[0]:<{width-1}}" + "|\n"
+            elif len(args) == 2:
+                string += "|" + f"{args[0]:^{widths[0]}}" + "|" + f"{args[1]:^{widths[1]}}" + "|\n"
+            else:
+                raise RuntimeError()
+            return string
+                
+        string = "+" + 65 * "-" + "+\n"
+        
+        string = add_row(string, "dimensionless numbers")
+        string = add_row(string)
+        string = add_row(string, "name", "value")
+        string = add_row(string)
+
         for key, value in self._dimensionless_numbers.items():
             if value is not None:
-                string += "|" + "{:^15}".format(key) + "|" + "{:^25.3e}".format(value) + "|\n"
+                string = add_row(string, key, value)
             else:
-                string += "|" + "{:^15}".format(key) + "|" + "{:^25}".format("None") + "|\n"
-        string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
+                string = add_row(string, key, "None")
+        string = add_row(string)
 
         if hasattr(self, "_equation_coefficients"):
-            string += "|" + "{:^41}".format("equation coefficients") + "|\n"
-            string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
-            string += "|" + "{:^15}".format("term") + "|" + "{:^25}".format("value") + "|\n"
-            string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
-            for key, value in self._equation_coefficients.items():
-                name = key.rstrip("term").replace("_", " ").strip()
-                if value is not None:
-                    string += "|" + "{:^15}".format(name) + "|" + "{:^25.3e}".format(value) + "|\n"
-                else:
-                    string += "|" + "{:^15}".format(name) + "|" + "{:^25}".format("None") + "|\n"
-            string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
+            string = add_row(string, "equation coefficients")
+            string = add_row(string)
 
-            string += "|" + "{:^41}".format("coefficient expressions") + "|\n"
-            string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
-            string += "|" + "{:^15}".format("term") + "|" + "{:^25}".format("value") + "|\n"
-            string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
+            for super_key, coefficients in self._equation_coefficients.items():
+                string = add_row(string, super_key + " equation")
+                string = add_row(string, "term", "value")
+                string = add_row(string)
+                for key, value in coefficients.items():
+                    name = key.rstrip("term").replace("_", " ").strip()
+                    if value is not None:
+                        string = add_row(string, key, value)
+                    else:
+                        string = add_row(string, key, "None")
+                string = add_row(string)
+
+            string = add_row(string, "coefficient expressions")
+            string = add_row(string, "term", "value")
+            string = add_row(string)
 
             coefficient_expressions = dict()
-            if ("Ro" not in self._dimensionless_numbers) and \
-                    ("Ek" not in self._dimensionless_numbers):
-                coefficient_expressions["coriolis"] = "--"
-                coefficient_expressions["euler"] = "--"
-                coefficient_expressions["pressure"] = "1"
-                coefficient_expressions["viscous"] = "1 / Re"
-                coefficient_expressions["body force"] = "1 / Fr^2"
-            else:
-                if "Ro" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
-                    rotation_coefficient = "1/ Ro"
-                    viscous_coefficient = "1 / Re"
-                elif "Ro" in self._dimensionless_numbers and "Ek" in self._dimensionless_numbers:
-                    rotation_coefficient = "1 / Ro"
-                    viscous_coefficient = "Ek / Ro"
-                elif "Ek" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
-                    rotation_coefficient = "1/ (Ek * Re)"
-                    viscous_coefficient = "1 / Re"
-                elif "Ek" in self._dimensionless_numbers:
-                    assert "Re" not in self._dimensionless_numbers
-                    assert "Ro" not in self._dimensionless_numbers
-                    rotation_coefficient = "1"
-                    viscous_coefficient = "Ek"
-                elif "Ro" in self._dimensionless_numbers:
-                    assert "Re" not in self._dimensionless_numbers
-                    assert "Ek" not in self._dimensionless_numbers
-                    rotation_coefficient = "1 / Ro"
-                    viscous_coefficient = "1"
-                else:  # pragma: no cover
-                    raise RuntimeError()
-                coefficient_expressions["coriolis"] = rotation_coefficient
-                coefficient_expressions["euler"] = rotation_coefficient
-                coefficient_expressions["pressure"] = "1"
-                coefficient_expressions["viscous"] = viscous_coefficient
+            
+            if not any(x in self._dimensionless_numbers for x in ("L", "M", "N", "Th")):
+                if ("Ro" not in self._dimensionless_numbers) and \
+                        ("Ek" not in self._dimensionless_numbers):
+                    coefficient_expressions["pressure"] = "1"
+                    coefficient_expressions["viscous"] = "1 / Re"
+                else:
+                    if "Ro" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
+                        rotation_coefficient = "1/ Ro"
+                        viscous_coefficient = "1 / Re"
+                    elif "Ro" in self._dimensionless_numbers and "Ek" in self._dimensionless_numbers:
+                        rotation_coefficient = "1 / Ro"
+                        viscous_coefficient = "Ek / Ro"
+                    elif "Ek" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
+                        rotation_coefficient = "1/ (Ek * Re)"
+                        viscous_coefficient = "1 / Re"
+                    elif "Ek" in self._dimensionless_numbers:
+                        assert "Re" not in self._dimensionless_numbers
+                        assert "Ro" not in self._dimensionless_numbers
+                        rotation_coefficient = "1"
+                        viscous_coefficient = "Ek"
+                    elif "Ro" in self._dimensionless_numbers:
+                        assert "Re" not in self._dimensionless_numbers
+                        assert "Ek" not in self._dimensionless_numbers
+                        rotation_coefficient = "1 / Ro"
+                        viscous_coefficient = "1"
+                    else:  # pragma: no cover
+                        raise RuntimeError()
+                    coefficient_expressions["coriolis"] = rotation_coefficient
+                    coefficient_expressions["euler"] = rotation_coefficient
+                    coefficient_expressions["pressure"] = "1"
+                    coefficient_expressions["viscous"] = viscous_coefficient
                 if ("Fr" in self._dimensionless_numbers):
                     coefficient_expressions["body force"] = "1 / Fr^2"
                 else:
                     coefficient_expressions["body force"] = "--"
+            else:
+                assert all(x not in self._dimensionless_numbers for x in ("Ek", "Ro"))
+                coefficient_expressions["pressure"] = "1"
+                coefficient_expressions["viscous"] = "1 / (1 -N^2) / Re"
+                coefficient_expressions["coupling"] = "N^2 / (1 - N^2)"
+                coefficient_expressions["viscous (spin)"] = "1 / L^2 / Re / Th"
+                coefficient_expressions["vol. viscous (spin)"] = "1 / M^2 / Re / Th"
+                coefficient_expressions["coupling (spin)"] = "N^2 / (1 - N^2)"
+                if ("Fr" in self._dimensionless_numbers):
+                    coefficient_expressions["body force"] = "1 / Fr^2"
+                else:
+                    coefficient_expressions["body force"] = "--"
+
             for name, expression in coefficient_expressions.items():
-                string += "|" + "{:^15}".format(name) + "|" + "{:^25}".format(expression) + "|\n"
-            string += "+" + 15 * "-" + "+" + 25 * "-" + "+\n"
+                string = add_row(string, name, expression)
+            string = add_row(string)
         return string
 
     def _compute_equation_coefficients(self):
         assert hasattr(self, "_dimensionless_numbers")
+        
+        if not any(x in self._dimensionless_numbers for x in ("L", "M", "N", "Th")):
 
-        if not hasattr(self, "_equation_coefficients"):
-            self._equation_coefficients = dict()
-        self._equation_coefficients["convective_term"] = 1.0
-
-        if "Ro" not in self._dimensionless_numbers and \
-               "Ek" not in self._dimensionless_numbers:
-            self._equation_coefficients["coriolis_term"] = None
-            self._equation_coefficients["euler_term"] = None
-            self._equation_coefficients["pressure_term"] = 1.0
-            if "Re" in self._dimensionless_numbers:
-                self._equation_coefficients["viscous_term"] = 1.0 / self._dimensionless_numbers["Re"]
-            else:  # pragma: no cover
-                raise RuntimeError()
-            if "Fr" in self._dimensionless_numbers:
-                self._equation_coefficients["body_force_term"] = 1.0 / self._dimensionless_numbers["Fr"]**2
+            if not hasattr(self, "_equation_coefficients"):
+                self._equation_coefficients = dict()
+            self._equation_coefficients["momentum"] = dict()
+            coefficients = self._equation_coefficients["momentum"]
+        
+            coefficients["convective_term"] = 1.0
+        
+            if "Ro" not in self._dimensionless_numbers and \
+                    "Ek" not in self._dimensionless_numbers:
+                coefficients["coriolis_term"] = None
+                coefficients["euler_term"] = None
+                coefficients["pressure_term"] = 1.0
+                if "Re" in self._dimensionless_numbers:
+                    coefficients["viscous_term"] = 1.0 / self._dimensionless_numbers["Re"]
+                else:  # pragma: no cover
+                    raise RuntimeError()
             else:
-                self._equation_coefficients["body_force_term"] = None
+                assert not all(x in self._dimensionless_numbers for x in ("Ek", "Re", "Ro"))
+
+                if "Ro" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
+                    rotation_coefficient = 1.0 / self._dimensionless_numbers["Ro"]
+                    viscous_coefficient = 1.0 / self._dimensionless_numbers["Re"]
+                elif "Ro" in self._dimensionless_numbers and "Ek" in self._dimensionless_numbers:
+                    rotation_coefficient = 1.0 / self._dimensionless_numbers["Ro"]
+                    viscous_coefficient = self._dimensionless_numbers["Ek"] / self._dimensionless_numbers["Ro"]
+                elif "Ek" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
+                    rotation_coefficient = 1.0 / (self._dimensionless_numbers["Ek"] *
+                                                  self._dimensionless_numbers["Re"])
+                    viscous_coefficient = 1.0 / self._dimensionless_numbers["Re"]
+                elif "Ek" in self._dimensionless_numbers:
+                    assert "Re" not in self._dimensionless_numbers
+                    assert "Ro" not in self._dimensionless_numbers
+                    rotation_coefficient = 1.0
+                    viscous_coefficient = self._dimensionless_numbers["Ek"]
+                elif "Ro" in self._dimensionless_numbers:
+                    assert "Re" not in self._dimensionless_numbers
+                    assert "Ek" not in self._dimensionless_numbers
+                    rotation_coefficient = 1.0 / self._dimensionless_numbers["Ro"]
+                    viscous_coefficient = 1.0
+                else:  # pragma: no cover
+                    raise RuntimeError()
+                coefficients["coriolis_term"] = rotation_coefficient
+                coefficients["euler_term"] = rotation_coefficient
+                coefficients["pressure_term"] = 1.0
+                coefficients["viscous_term"] = viscous_coefficient
+            if "Fr" in self._dimensionless_numbers:
+                coefficients["body_force_term"] = 1.0 / self._dimensionless_numbers["Fr"]**2
+            else:
+                coefficients["body_force_term"] = None
         else:
-            if "Ek" in self._dimensionless_numbers and \
-                    "Re" in self._dimensionless_numbers and \
-                    "Ro" in self._dimensionless_numbers:  # pragma: no cover
-                raise RuntimeError("Overconstrained parameter set.")
-
-            if "Ro" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
-                rotation_coefficient = 1.0 / self._dimensionless_numbers["Ro"]
-                viscous_coefficient = 1.0 / self._dimensionless_numbers["Re"]
-            elif "Ro" in self._dimensionless_numbers and "Ek" in self._dimensionless_numbers:
-                rotation_coefficient = 1.0 / self._dimensionless_numbers["Ro"]
-                viscous_coefficient = self._dimensionless_numbers["Ek"] / self._dimensionless_numbers["Ro"]
-            elif "Ek" in self._dimensionless_numbers and "Re" in self._dimensionless_numbers:
-                rotation_coefficient = 1.0 / (self._dimensionless_numbers["Ek"] *
-                                              self._dimensionless_numbers["Re"])
-                viscous_coefficient = 1.0 / self._dimensionless_numbers["Re"]
-            elif "Ek" in self._dimensionless_numbers:
-                assert "Re" not in self._dimensionless_numbers
-                assert "Ro" not in self._dimensionless_numbers
-                rotation_coefficient = 1.0
-                viscous_coefficient = self._dimensionless_numbers["Ek"]
-            elif "Ro" in self._dimensionless_numbers:
-                assert "Re" not in self._dimensionless_numbers
-                assert "Ek" not in self._dimensionless_numbers
-                rotation_coefficient = 1.0 / self._dimensionless_numbers["Ro"]
-                viscous_coefficient = 1.0
+            assert all(x not in self._dimensionless_numbers for x in ("Ek", "Ro"))
+            
+            if not hasattr(self, "_equation_coefficients"):
+                self._equation_coefficients = dict()
+            
+            self._equation_coefficients["momentum"] = dict()
+            self._equation_coefficients["spin"] = dict()
+            
+            momentum_coefficients = self._equation_coefficients["momentum"]
+            momentum_coefficients["convective_term"] = 1.0
+            momentum_coefficients["coriolis_term"] = None
+            momentum_coefficients["euler_term"] = None
+            momentum_coefficients["pressure_term"] = 1.0
+            if "Re" in self._dimensionless_numbers:
+                momentum_coefficients["viscous_term"] = 1.0 /  (1.0 - self._dimensionless_numbers["N"]**2) / \
+                                                        self._dimensionless_numbers["Re"]
             else:  # pragma: no cover
                 raise RuntimeError()
-            self._equation_coefficients["coriolis_term"] = rotation_coefficient
-            self._equation_coefficients["euler_term"] = rotation_coefficient
-            self._equation_coefficients["pressure_term"] = 1.0
-            self._equation_coefficients["viscous_term"] = viscous_coefficient
-            if "Fr" in self._dimensionless_numbers:
-                self._equation_coefficients["body_force_term"] = 1.0 / self._dimensionless_numbers["Fr"]**2
-            else:
-                self._equation_coefficients["body_force_term"] = None
+            momentum_coefficients["coupling_term"] = self._dimensionless_numbers["N"]**2 / \
+                                                     (1.0 - self._dimensionless_numbers["N"]**2)
+
+            spin_coefficients = self._equation_coefficients["spin"]
+            spin_coefficients["convective_term"] = 1.0
+            if all(x in self._dimensionless_numbers for x in ("Re", "L", "Th")):
+                spin_coefficients["viscous_term"] = 1.0 /  self._dimensionless_numbers["L"]**2 / \
+                                                    self._dimensionless_numbers["Re"] / \
+                                                    self._dimensionless_numbers["Th"]
+            else:  # pragma: no cover
+                raise RuntimeError()
+            if all(x in self._dimensionless_numbers for x in ("Re", "M", "Th")):
+                spin_coefficients["vol_viscous_term"] = 1.0 /  self._dimensionless_numbers["M"]**2 / \
+                                                        self._dimensionless_numbers["Re"] / \
+                                                        self._dimensionless_numbers["Th"]
+            spin_coefficients["coupling_term"] = momentum_coefficients["coupling_term"]
 
     def _read_dimensionless_number(self, d, key, alternative_key):
         assert hasattr(self, "_dimensionless_numbers")
@@ -294,3 +361,53 @@ class EquationCoefficientHandler():
                 "Ek" in self._dimensionless_numbers:  # pragma: no cover
             raise RuntimeError("Overconstrained parameter set.")
         self._set_dimensionless_number("Ro", value)
+
+    @property
+    def L(self):
+        return self._dimensionless_numbers.get("L")
+
+    @L.setter
+    def L(self, value):
+        assert self._closed is False
+        if "Ro" in self._dimensionless_numbers or \
+                "Ek" in self._dimensionless_numbers:  # pragma: no cover
+            raise RuntimeError("Unknown non-dimenional form.")
+        self._set_dimensionless_number("L", value)
+
+    @property
+    def M(self):
+        return self._dimensionless_numbers.get("M")
+
+    @M.setter
+    def M(self, value):
+        assert self._closed is False
+        if "Ro" in self._dimensionless_numbers or \
+                "Ek" in self._dimensionless_numbers:  # pragma: no cover
+            raise RuntimeError("Unknown non-dimenional form.")
+        self._set_dimensionless_number("M", value)
+
+    @property
+    def N(self):
+        return self._dimensionless_numbers.get("N")
+
+    @N.setter
+    def N(self, value):
+        assert self._closed is False
+        if "Ro" in self._dimensionless_numbers or \
+                "Ek" in self._dimensionless_numbers:  # pragma: no cover
+            raise RuntimeError("Unknown non-dimenional form.")
+        assert value < 1.0, "Parameter N must be less than unity."
+        self._set_dimensionless_number("N", value)
+
+
+    @property
+    def Th(self):
+        return self._dimensionless_numbers.get("Th")
+
+    @Th.setter
+    def Th(self, value):
+        assert self._closed is False
+        if "Ro" in self._dimensionless_numbers or \
+                "Ek" in self._dimensionless_numbers:  # pragma: no cover
+            raise RuntimeError("Unknown non-dimenional form.")
+        self._set_dimensionless_number("Th", value)
