@@ -63,6 +63,13 @@ def test_equation_coefficients():
     eq04.close()
     print(eq04.get_file_suffix())
 
+    eq05 = EquationCoefficientHandler()
+    print(eq05)
+    eq05.Ro = 1.0
+    eq05.Re = 25.0
+    _ = eq05.equation_coefficients
+    print(eq05.get_file_suffix())
+
 
 if __name__ == "__main__":
     test_equation_coefficients()
