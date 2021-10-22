@@ -79,7 +79,7 @@ class EquationCoefficientHandler():
                 string += "|" + f" {args[0]:<{width-1}}" + "|\n"
             elif len(args) == 2:
                 string += "|" + f"{args[0]:^{widths[0]}}" + "|" + f"{args[1]:^{widths[1]}}" + "|\n"
-            else:
+            else:  # pragma: no cover
                 raise RuntimeError()
             return string
 
@@ -268,7 +268,7 @@ class EquationCoefficientHandler():
         assert isinstance(key, str)
         assert isinstance(alternative_key, str)
         value = None
-        if key in d:
+        if key in d:  # pragma: no cover
             assert alternative_key not in d
             value = d[key]
         if alternative_key in d:

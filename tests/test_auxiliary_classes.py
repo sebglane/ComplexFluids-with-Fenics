@@ -49,12 +49,18 @@ def test_equation_coefficients():
     eq04.L = 25.0
     eq04.N = 0.5
     eq04.Th = 0.5
+    eq04.Fr = 1.0
     _ = eq04.equation_coefficients
     print(eq04)
     eq04.M = 10.0
     _ = eq04.equation_coefficients
     print(eq04)
     eq04.modify_dimensionless_number("Re", 10.0)
+    _ = eq04.L
+    _ = eq04.M
+    _ = eq04.N
+    _ = eq04.Th
+    eq04.close()
     print(eq04.get_file_suffix())
 
 
