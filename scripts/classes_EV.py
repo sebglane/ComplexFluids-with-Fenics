@@ -82,9 +82,66 @@ def get_max_local(function, degree_from, functionspace_from, functionspace_to, c
     )
     return max_local[dof_args_to]
 
+def calculate_NormE(Jh):
+    """
+    Returns maximum value of entropy deviation ||E(J) - avg(E(J))||_max as FEA-approximation of infinity-norm on domain.
+
+    :param Jh: Function, Inertia Tensor
+    :return: float, maximum entropy deviation
+    """
+    fspace = Jh.function_space()
+    n_dofs = fspace.dim()
+    NormE = dlfn.project(
+        dlfn.sqrt((entropy(Jh) - dlfn.project(entropy(Jh), fspace).vector().sum() / n_dofs) ** 2),
+        fspace
+    ).vector().max()
+
+    return NormE
+
+def calculate_NormD(D_norm, Jh, Jh_, Jh_n, dt, beta, degree):
+    """
+    Calculate cell-wise maximum of entropy residual as FEA-approximation of infinity-norm on the elements.
+
+    :param D_norm: Function, assign result to this function
+    :param Jh: Function,
+    :param Jh_: Function,
+    :param Jh_n: Function,
+    :param dt: float, size of time-step
+    :param beta: float, transport velocity
+    :param degree: int, polynomial degree of J
+    :return: None
+    """
+    fspace_J = Jh.function_space()
+    fspace_D = D_norm.function_space()
+
+    D = dlfn.project(
+        (.5 * (3 * entropy(Jh) - 4 * entropy(Jh_) + entropy(Jh_n)) / dt
+         + Dx(entropy_flux(Jh, beta), 0)),
+        fspace_J
+    )
+    D_norm.vector().set_local(get_max_local(D, degree, fspace_J, fspace_D))
+    return
+
+def calculate_nu(Nu_h, D_norm, E_norm, Nu_max, c_e, h_k):
+    """
+    Calculate viscosity nu according to Entropy-Viscosity-Method.
+
+    :param Nu_h: Function, assign result to this function
+    :param D_norm: Function, cell-wise maximum of entropy residual
+    :param E_norm: float, maximum value of entropy deviation
+    :param Nu_max: float, maximum value of Nu_h
+    :param c_e: float, tunable parameter in EV-Method
+    :param h_k: float, spatial step size
+    :return: None
+    """
+    fspace = D_norm.function_space()
+    Nu_E = dlfn.project(c_e * h_k ** 2 * D_norm / E_norm, fspace)
+    dlfn.assign(Nu_h, dlfn.project(min_func(Nu_E, Nu_max), fspace))
+    return
+
 def min_func(f1, f2):
     """
-    Return minimum of two functions. Exact for degree=0.
+    Return minimum of two functions.
 
     :param f1:
     :param f2:
