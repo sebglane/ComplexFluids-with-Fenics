@@ -7,11 +7,13 @@ _streamline_diffusion_cpp = """
 #include <pybind11/pybind11.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/FunctionSpace.h>
+#include <dolfin/mesh/Vertex.h>
+#include <cmath>
 using namespace dolfin;
 class StabilizationParameterSD : public Expression
 {
 public:
-  std::shared_ptr<GenericFunction> J;
+  std::shared_ptr<GenericFunction> nu, J;
   // constructor
   StabilizationParameterSD() : Expression() { }
   void eval(Array<double>& values, const Array<double>& x,
@@ -20,17 +22,35 @@ public:
     // Get dolfin cell and its diameter
     // FIXME: Avoid dynamic allocation
     dolfin_assert(J->function_space());
+
     const std::shared_ptr<const Mesh> mesh = J->function_space()->mesh();
     const Cell cell(*mesh, c.index);
     double h = cell.h();
     
-    Array<double> nu(J->value_size());
-    J->eval(nu, x, c);
-    printf("%lu\\n", cell.num_vertices());
-    printf("%d\\n", nu.size());
-    values[0] = nu[0];
+    Array<double> vals(nu->value_size());
+    Array<double> coords(3);
+    Point point;
+    
+    double max_val = 0;
+    
+    u_int i = 0;
+    for (dolfin::VertexIterator vertex(cell); !vertex.end(); ++vertex)
+    {
+        point = vertex->point();
+        coords[0] = point[0];
+        coords[1] = point[1];
+        coords[2] = point[2];
+        nu->eval(vals, coords, c);
+        if (vals[0] > max_val)
+        {
+            max_val = vals[0];
+        }
+        i++;
+    }
+    values[0] = max_val;
   }
 };
+
 PYBIND11_MODULE(SIGNATURE, m)
 {
   pybind11::class_<StabilizationParameterSD,
@@ -38,6 +58,7 @@ PYBIND11_MODULE(SIGNATURE, m)
              Expression>
     (m, "StabilizationParameterSD")
     .def(pybind11::init<>())
+    .def_readwrite("nu", &StabilizationParameterSD::nu)
     .def_readwrite("J", &StabilizationParameterSD::J);
 }
 """
@@ -45,7 +66,7 @@ PYBIND11_MODULE(SIGNATURE, m)
 _expr = compile_cpp_code(_streamline_diffusion_cpp).StabilizationParameterSD
 
 
-def StabilizationParameterSD(J):
+def StabilizationParameterSD(J, nu):
     """Returns a subclass of :py:class:`dolfin.Expression` representing
     streamline diffusion stabilization parameter.
     This kind of stabilization is convenient when a multigrid method is used
@@ -65,5 +86,6 @@ def StabilizationParameterSD(J):
     mesh = J.function_space().mesh()
     element = FiniteElement("DG", mesh.ufl_cell(), 0)
     delta_sd = CompiledExpression(_expr(), element=element, domain=mesh)
+    delta_sd.nu = nu._cpp_object
     delta_sd.J = J._cpp_object
     return delta_sd

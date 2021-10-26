@@ -20,11 +20,10 @@ u_0 = 1.
 
 # Time-dependent Parameters
 t_adaptive = 100
-dt = .1 * l / n_dofs / abs(u_0)
+dt = .5 * l / n_dofs / abs(u_0)
 dT = dlfn.Constant(dt) # Can be updated via dt.assign(dt_new) ==> adaptive time-stepping
 t_end = 2
 num_steps = int(t_end // dt) # Only viable for constant dt
-time = np.linspace(0, t_end, num_steps)
 
 dt_0 = dt * np.tanh(1 / t_adaptive)
 
@@ -100,9 +99,11 @@ Nu_h = dlfn.Function(Vh)
 Nu_E = dlfn.Function(Vh)
 
 # == Initial J =========================
-J_0_Expr = Initial_Condition(p_deg)
-J_0_Expr_ = Initial_Condition(p_deg, -dt_0 * u_0)
-J_0_Expr_n = Initial_Condition(p_deg, -dt_0 * u_0 * 2)
+J_0_Expr = Initial_Condition(p_deg, l)
+J_0_Expr_ = Initial_Condition(p_deg, l, -dt_0 * u_0)
+J_0_Expr_n = Initial_Condition(p_deg, l, -dt_0 * u_0 * 2)
+
+J_ana = dlfn.Function(Wh)
 
 # == Initial Nu ========================
 J_0 = dlfn.interpolate(J_0_Expr, Wh)
@@ -123,6 +124,7 @@ F_2 = (k2 * del_J + F_spatial(sol_J_ + .5 * dT * k1, del_J, u_0)) * dx
 F_3 = (k3 * del_J + F_spatial(sol_J_ + .5 * dT * k2, del_J, u_0)) * dx
 F_4 = (k4 * del_J + F_spatial(sol_J_ + dT * k3, del_J, u_0)) * dx
 
+# TODO: Use dolfin-ERK4 class
 F_visc_1 = (k1 * del_J + F_spatial_visc(sol_J_, del_J, u_0, Nu_h)) * dx
 F_visc_2 = (k2 * del_J + F_spatial_visc(sol_J_ + .5 * dT * k1, del_J, u_0, Nu_h)) * dx
 F_visc_3 = (k3 * del_J + F_spatial_visc(sol_J_ + .5 * dT * k2, del_J, u_0, Nu_h)) * dx
@@ -133,11 +135,18 @@ F = F_t - dT / 3. * (.5 * k1_h + k2_h + k3_h + .5 * k4_h) * del_J * dx
 vtkfile_J0 = dlfn.File(os.path.join(path, 'solution_0.pvd'))
 vtkfile_J0 << sol_J_
 
-# TODO: Rewrite as while-loop
+vtkfile_J1 = dlfn.File(os.path.join(path, 'J_ana_0.pvd'))
+vtkfile_J1 << sol_J_
+
 # == Integrate ===================================
-for i, t_i in enumerate(time):
+t_i, i = 0., 0
+while t_i < t_end:
     print("time step {i}, time {t_i}".format(i=i, t_i=t_i))
     dT.assign(dt * np.tanh((i + 1) / t_adaptive))
+    t_i += dT.values()[0]
+    print(t_i)
+
+    dlfn.assign(J_ana, dlfn.interpolate(Initial_Condition(p_deg, l, offset = t_i * u_0), Wh))
 
     # Calc Nu
     E_normalized = calculate_NormE(sol_J_h)
@@ -176,8 +185,14 @@ for i, t_i in enumerate(time):
         vtkfile_2 = dlfn.File(os.path.join(path, 'Nu_{}.pvd'.format((i+1) // mod_i)))
         vtkfile_2 << Nu_h
 
+        # TODO: Calculate Error-Norm of solution
+        vtkfile_3 = dlfn.File(os.path.join(path, 'J_ana_{}.pvd'.format((i+1) // mod_i)))
+        vtkfile_3 << J_ana
+
         x_plot = np.linspace(0., 1., n_dofs)
         y_plot = np.fromiter((sol_J_(x_i) for x_i in x_plot), float)
         plt.plot(x_plot, y_plot)
         plt.savefig(os.path.join(path, 'img/sol_{}.png'.format((i+1) // mod_i)))
         plt.clf()
+
+    i += 1

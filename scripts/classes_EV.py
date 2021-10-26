@@ -163,11 +163,12 @@ class PeriodicBoundary(dlfn.SubDomain):
         y[0] = x[0] - self.l
 
 class Initial_Condition(dlfn.UserExpression):
-    def __init__(self, degree, offset=0):
+    def __init__(self, degree, l, offset=0):
         self._offset = offset
+        self._l = l
         super().__init__(degree=degree)
     def eval(self, values, x):
-        x_ = x[0] + self._offset
+        x_ = (x[0] - self._offset) % self._l
         if abs(2 * x_ - .3) <= 0.25 + dlfn.DOLFIN_EPS:
             values[0] = dlfn.exp(-300 * (2 * x_ - .3) ** 2)
         elif abs(2 * x_ - .9) <= 0.2 + dlfn.DOLFIN_EPS:

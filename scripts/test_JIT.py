@@ -8,10 +8,10 @@ from entropy_viscosity_cpp import *
 
 # Parameters ==================================
 # Polynomial Degree
-p_deg = 1
+p_deg = 2
 
 # Domain
-nx = 3	# discretization points in x-direction
+nx = 100	# discretization points in x-direction
 l = 2.
 h_k = l / nx
 
@@ -35,10 +35,14 @@ class Initial_Condition(dlfn.UserExpression):
 # == Element Formulation =========================
 c = mesh.ufl_cell()
 
+
+
 Wh = dlfn.FunctionSpace(mesh, "CG", p_deg)
-#Vh = dlfn.FunctionSpace(mesh, "DG", 0)
+Vh = dlfn.FunctionSpace(mesh, "DG", 0)
+
 n_dofs = Wh.dim()
-test_fun = dlfn.Function(Wh)
+J = dlfn.Function(Wh)
+test_fun = dlfn.Function(Vh)
 
 dlfn.info("Number of cells {0}, number of DoFs: {1}".format(n_cells, n_dofs))
 
@@ -47,10 +51,10 @@ dx = dlfn.Measure("dx", domain=mesh)
 n = dlfn.FacetNormal(mesh)
 #dA = dlfn.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
-J = Initial_Condition()
-J_interp = dlfn.interpolate(J, Wh)
+dlfn.assign(J, dlfn.interpolate(Initial_Condition(), Wh))
+dlfn.assign(test_fun, dlfn.interpolate(Initial_Condition(), Vh))
 
-nu = StabilizationParameterSD(J_interp)
+nu = StabilizationParameterSD(J, J)
 #J_pc = J + delta*inner(dot(grad(u), u_), dot(grad(v), u_))*dx
 vtkfile = dlfn.File('results/min_max.pvd')
-vtkfile << dlfn.interpolate(nu, Wh)
+vtkfile << dlfn.interpolate(nu, Vh)
