@@ -1,17 +1,16 @@
 import os.path
 
 import dolfin as dlfn
-from dolfin import dot, inner, grad, div, as_vector, Dx, sqrt, cross, bessel_I, lhs, rhs
-import numpy as np
-import classes_EV
 from entropy_viscosity_cpp import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Parameters ==================================
 # Polynomial Degree
-p_deg = 2
+p_deg = 3
 
 # Domain
-nx = 100	# discretization points in x-direction
+nx = 4	# discretization points in x-direction
 l = 2.
 h_k = l / nx
 
@@ -26,11 +25,10 @@ class Initial_Condition(dlfn.UserExpression):
         self._offset = offset
         super().__init__(degree=degree)
     def eval(self, values, x):
-        x_ = x[0] + self._offset
-        if x_ < 1. + dlfn.DOLFIN_EPS:
-            values[0] = x_ ** 2
+        if x[0] < 1. + dlfn.DOLFIN_EPS:
+            values[0] = -4 * x[0] ** 2 + 5 * x[0]
         else:
-            values[0] = 1.
+            values[0] = 1
 
 # == Element Formulation =========================
 c = mesh.ufl_cell()
@@ -39,10 +37,17 @@ c = mesh.ufl_cell()
 
 Wh = dlfn.FunctionSpace(mesh, "CG", p_deg)
 Vh = dlfn.FunctionSpace(mesh, "DG", 0)
+Ph = dlfn.FunctionSpace(mesh, "DG", p_deg)
 
 n_dofs = Wh.dim()
 J = dlfn.Function(Wh)
 test_fun = dlfn.Function(Vh)
+
+
+del_ = dlfn.TestFunction(Ph)
+sol_ = dlfn.TrialFunction(Ph)
+sol_h = dlfn.Function(Ph)
+
 
 dlfn.info("Number of cells {0}, number of DoFs: {1}".format(n_cells, n_dofs))
 
@@ -53,8 +58,24 @@ n = dlfn.FacetNormal(mesh)
 
 dlfn.assign(J, dlfn.interpolate(Initial_Condition(), Wh))
 dlfn.assign(test_fun, dlfn.interpolate(Initial_Condition(), Vh))
+nu = StabilizationParameterSD(J, test_fun)
 
-nu = StabilizationParameterSD(J, J)
-#J_pc = J + delta*inner(dot(grad(u), u_), dot(grad(v), u_))*dx
-vtkfile = dlfn.File('results/min_max.pvd')
-vtkfile << dlfn.interpolate(nu, Vh)
+F = (nu * del_ - sol_ * del_) * dx
+dlfn.solve(dlfn.lhs(F)==dlfn.rhs(F), sol_h)
+
+x_plot = np.linspace(0, l, 200)
+
+y_plot_0 = np.fromiter((sol_h(x_i) for x_i in x_plot), float)
+y_plot_1 = np.fromiter((J(x_i) for x_i in x_plot), float)
+y_plot_2 = np.fromiter((test_fun(x_i) for x_i in x_plot), float)
+
+plt.plot(x_plot, y_plot_1)
+plt.plot(x_plot, y_plot_2)
+plt.plot(x_plot, y_plot_1+y_plot_2)
+plt.plot(x_plot, y_plot_0)
+
+plt.legend(['$f_1$', '$f_2$', '$f_1+f_2$', '$max_K(f_1+f_2)$'])
+
+plt.savefig('results/test_JIT.png')
+#vtkfile = dlfn.File('results/min_max.pvd')
+#vtkfile << dlfn.project(nu, Ph)
