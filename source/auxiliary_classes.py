@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from dolfin import NonlinearProblem
 from dolfin import SystemAssembler
+from dolfin import Constant
 import math
 
 
