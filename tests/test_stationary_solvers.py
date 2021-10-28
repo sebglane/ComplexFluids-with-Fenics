@@ -55,6 +55,21 @@ class CavityProblem(StationaryProblem):
         self._coefficient_handler = EquationCoefficientHandler(Re=200.0, N=0.25,
                                                                L=0.4, Th=1.0e-3)
 
+    def postprocess_solution(self):
+        _ = self._get_pressure()
+        _ = self._get_velocity()
+        _ = self._get_omega()
+        _ = self.space_dim
+        # add pressure gradient to the field output
+        self._add_to_field_output(self._compute_pressure_gradient())
+        # add vorticity to the field output
+        self._add_to_field_output(self._compute_vorticity())
+        # add stream potential to the field output
+        self._add_to_field_output(self._compute_stream_potential())
+        # add relative angular to the field output
+        self._add_to_field_output(self._compute_relative_angular_velocity())
+
+
 def test_cavity():
     cavity_flow = CavityProblem(25)
     cavity_flow.solve_problem()

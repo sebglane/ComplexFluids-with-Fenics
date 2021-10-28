@@ -55,7 +55,7 @@ class ProblemBase:
         field to a suitable function space.
         """
         velocity = self._get_velocity()
-        omega = self._get_velocity()
+        omega = self._get_omega()
 
         for field in (velocity, omega):
             family = field.ufl_element().family()
@@ -68,7 +68,8 @@ class ProblemBase:
         if self._space_dim == 2:
             elemOmegaRel = dlfn.FiniteElement("DG", cell, degree - 1)
             Wh = dlfn.FunctionSpace(self._mesh, elemOmegaRel)
-            expression = omega - dlfn.Constant(0.5) * dlfn.curl(velocity)
+            curl_v = -velocity[0].dx(1) + velocity[1].dx(0)
+            expression = omega - dlfn.Constant(0.5) * curl_v
             relative_angular_velocity = dlfn.project(expression, Wh)
             relative_angular_velocity.rename("relative angular velocity", "")
             return relative_angular_velocity

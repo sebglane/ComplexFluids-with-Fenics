@@ -5,7 +5,7 @@ from auxiliary_methods import boundary_normal
 from auxiliary_methods import extract_all_boundary_markers
 from auxiliary_classes import AngularVelocityVector
 import dolfin as dlfn
-from dolfin import cross, curl, div, dot, grad, inner, Dx
+from dolfin import cross, curl, div, dot, grad, inner
 from enum import Enum, auto
 import math
 import numpy as np
@@ -216,95 +216,6 @@ class SolverBase:
                 F += self._momentum_coefficients["euler_term"] * dot(dlfn.cross(alpha, x), w) * dV
             return F
 
-    def _assign_function(self, receiving_functions, assigning_functions):
-        """Assign functions from the joint function space to the subspaces or
-        vice versa."""
-        assert hasattr(self, "_Wh")
-        assert isinstance(receiving_functions, (dlfn.Function, dict))
-        assert isinstance(assigning_functions, (dlfn.Function, dict))
-        # dictionary of subspaces
-        WhSub = self._get_subspaces()
-        # check whether a forward or backward assignment should be performed
-        forward_assignment = False
-        backward_assignment = False
-        if isinstance(receiving_functions, dict):
-            for key, function in receiving_functions.items():
-                if function in WhSub[key]:
-                    forward_assignment = True
-                if forward_assignment is True:
-                    assert function in WhSub[key]
-        elif isinstance(assigning_functions, dict):
-            for key, function in assigning_functions.items():
-                if function in WhSub[key]:
-                    backward_assignment = True
-                if backward_assignment is True:
-                    assert function in WhSub[key]
-        elif isinstance(receiving_functions, dlfn.Function) and isinstance(assigning_functions, dlfn.Function):
-            for key, space in WhSub.items():
-                if receiving_functions in space:
-                    forward_assignment = True
-                    break
-                elif assigning_functions in space:
-                    backward_assignment = True
-                    break
-        else:  # pragma: no cover
-            raise RuntimeError()
-        assert forward_assignment or backward_assignment
-
-        # forward assignment
-        if forward_assignment is True:
-            assert isinstance(assigning_functions, dlfn.Function)
-            if not isinstance(receiving_functions, dict):
-                assert isinstance(receiving_functions, dlfn.Function)
-                for key, space in WhSub.items():
-                    if receiving_functions in space:
-                        break
-                index = self._field_association[key]
-                assert assigning_functions in self._Wh.sub(index)
-                forward_subspace_assigners = self._get_forward_subspace_assigners()
-                forward_subspace_assigners[key].assign(receiving_functions, assigning_functions)
-            else:
-                if len(receiving_functions) == 2:
-                    receiving_function_list = [None] * 2
-                    for key, function in receiving_functions.items():
-                        receiving_function_list[self._field_association[key]] = function
-                    forward_assigner = self._get_forward_assigner()
-                    forward_assigner.assign(receiving_function_list, assigning_functions)
-                elif len(receiving_functions) == 1:
-                    key = list(receiving_functions.keys())[0]
-                    index = self._field_association[key]
-                    assert assigning_functions in self._Wh.sub(index)
-                    forward_subspace_assigners = self._get_forward_subspace_assigners()
-                    forward_subspace_assigners[key].assign(receiving_functions[key], assigning_functions)
-                else:  # pragma: no cover
-                    raise RuntimeError()
-        else:
-            assert isinstance(receiving_functions, dlfn.Function)
-            if not isinstance(assigning_functions, dict):
-                assert isinstance(assigning_functions, dlfn.Function)
-                for key, space in WhSub.items():
-                    if assigning_functions in space:
-                        break
-                index = self._field_association[key]
-                assert receiving_functions in self._Wh.sub(index)
-                backward_subspace_assigners = self._get_backward_subspace_assigners()
-                backward_subspace_assigners[key].assign(receiving_functions, assigning_functions)
-            else:
-                if len(assigning_functions) == 2:
-                    assigning_functions_list = [None] * 2
-                    for key, function in assigning_functions.items():
-                        assigning_functions_list[self._field_association[key]] = function
-                    backward_assigner = self._get_backward_assigner()
-                    backward_assigner.assign(receiving_functions, assigning_functions_list)
-                elif len(assigning_functions) == 1:
-                    key = list(assigning_functions.keys())[0]
-                    index = self._field_association[key]
-                    assert receiving_functions in self._Wh.sub(index)
-                    backward_assigners = self._get_backward_subspace_assigners()
-                    backward_assigners[key].assign(receiving_functions, assigning_functions[key])
-                else:  # pragma: no cover
-                    raise RuntimeError()
-
     def _check_boundary_condition_format(self, bc, internal_constraint=False):
         """
         Check the general format of an arbitrary boundary condition.
@@ -397,7 +308,7 @@ class SolverBase:
         assert isinstance(v, self._form_function_types)
 
         if self._space_dim == 2:
-            return self._momentum_coefficients["coupling_term"] * dot(dlfn.as_vector([Dx(u, 1), -Dx(u, 0)]), v)
+            return self._momentum_coefficients["coupling_term"] * dot(dlfn.as_vector([u.dx(1), -u.dx(0)]), v)
         elif self._space_dim == 3:  # pragma: no cover
             return self._momentum_coefficients["coupling_term"] * dot(curl(u), v)
 
@@ -445,83 +356,6 @@ class SolverBase:
         assert isinstance(v, self._form_function_types), "{0}".format(type(v))
 
         return self._momentum_coefficients["pressure_term"] * div(u) * v
-
-    def _get_subspace(self, field):
-        """Returns the subspace of the `field`."""
-        assert isinstance(field, str)
-        assert field in self._field_association
-        if not hasattr(self, "_WhSub"):
-            self._WhSub = dict()
-
-        if field not in self._WhSub:
-            subspace_index = self._field_association[field]
-            self._WhSub[field] = self._Wh.sub(subspace_index).collapse()
-
-        return self._WhSub[field]
-
-    def _get_subspaces(self):
-        """Returns a dictionary of the subspaces of all physical fields."""
-        assert hasattr(self, "_Wh")
-        if not hasattr(self, "_WhSub"):
-            self._WhSub = dict()
-        for key, index in self._field_association.items():
-            if key not in self._WhSub:
-                self._WhSub[key] = self._Wh.sub(index).collapse()
-        return self._WhSub
-
-    def _get_backward_assigner(self):
-        """Returns a function assigner which assigns from all subspaces to the
-        joint function space."""
-        assert hasattr(self, "_Wh")
-        assert hasattr(self, "_WhSub")
-        if not hasattr(self, "_backward_assigner"):
-            assigning_spaces = [None] * len(self._WhSub)
-            for key, sub_space in self._WhSub.items():
-                assigning_spaces[self._field_association[key]] = sub_space
-            receiving_space = self._Wh
-            self._backward_assigner = dlfn.FunctionAssigner(receiving_space,
-                                                            assigning_spaces)
-        return self._backward_assigner
-
-    def _get_backward_subspace_assigners(self):
-        """Returns a dictionary of function assigners which assign from one
-        subspace to a component of the joint function space."""
-        assert hasattr(self, "_Wh")
-        assert hasattr(self, "_WhSub")
-        if not hasattr(self, "_backward_subspace_assigners"):
-            self._backward_subspace_assigners = dict()
-            for key, assigning_space in self._WhSub.items():
-                receiving_space = self._Wh.sub(self._field_association[key])
-                self._backward_subspace_assigners[key] = dlfn.FunctionAssigner(receiving_space,
-                                                                               assigning_space)
-        return self._backward_subspace_assigners
-
-    def _get_forward_assigner(self):
-        """Returns a function assigner which assigns from the joint function
-        space to all subspaces."""
-        assert hasattr(self, "_Wh")
-        assert hasattr(self, "_WhSub")
-        if not hasattr(self, "_forward_assigner"):
-            receiving_spaces = [None] * len(self._WhSub)
-            for key, sub_space in self._WhSub.items():
-                receiving_spaces[self._field_association[key]] = sub_space
-            assigning_space = self._Wh
-            self._forward_assigner = dlfn.FunctionAssigner(receiving_spaces,
-                                                           assigning_space)
-        return self._forward_assigner
-
-    def _get_forward_subspace_assigners(self):
-        """Returns a dictionary of function assigners which assign from one
-        component of the joint function space to a subspace."""
-        assert hasattr(self, "_Wh")
-        assert hasattr(self, "_WhSub")
-        if not hasattr(self, "_forward_subspace_assigners"):
-            self._forward_subspace_assigners = dict()
-            for key, receiving_space in self._WhSub.items():
-                assigning_space = self._Wh.sub(self._field_association[key])
-                self._forward_subspace_assigners[key] = \
-                    dlfn.FunctionAssigner(receiving_space, assigning_space)
-        return self._forward_subspace_assigners
 
     def _picard_linerization_convective_term_spin(self, velocity, u, v):
         assert hasattr(self, "_spin_coefficients")
@@ -987,10 +821,6 @@ class SolverBase:
                 if key not in self._momentum_coefficients:
                     self._momentum_coefficients[key] = None
         else:  # pragma: no cover
-            print("momentum_coefficients: ")
-            print(momentum_coefficients.keys())
-            print("self._momentum_coefficients: ")
-            print(self._momentum_coefficients.keys())
             for key, value in self._momentum_coefficients.items():
                 assert key in momentum_keys
                 print(key, value)
