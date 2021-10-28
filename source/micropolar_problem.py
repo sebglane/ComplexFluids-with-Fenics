@@ -3,9 +3,9 @@
 from auxiliary_classes import EquationCoefficientHandler
 from auxiliary_methods import extract_all_boundary_markers
 import dolfin as dlfn
-from ns_solver_base import VelocityBCType
-from ns_solver_base import PressureBCType
-from ns_solver_base import StationarySolverBase as StationarySolver
+from solver_base import VelocityBCType
+from solver_base import PressureBCType
+from solver_base import StationarySolverBase as StationarySolver
 import numpy as np
 import os
 from os import path
@@ -510,7 +510,8 @@ class StationaryProblem(ProblemBase):
             self._micropolar_solver.set_boundary_conditions(self._bcs)
 
         # pass equation coefficients
-        self._micropolar_solver.set_equation_coefficients(self._coefficient_handler.equation_coefficients)
+        self._micropolar_solver.set_equation_coefficients(self._coefficient_handler.equation_coefficients["momentum"],
+                                                          self._coefficient_handler.equation_coefficients["spin"])
 
         # pass body force
         if hasattr(self, "_body_force"):
@@ -528,12 +529,12 @@ class StationaryProblem(ProblemBase):
             pass
         except Exception as ex:  # pragma: no cover
             template = "An unexpected exception of type {0} occurred. " + \
-                       "Arguments:\n{1!r}"
+                        "Arguments:\n{1!r}"
             message = template.format(type(ex).__name__, ex.args)
             print(message)
 
         # parameter continuation
-        dlfn.info("Solving problem with parameter continuation...")  # pragma: no cover
+        dlfn.info("Solving problem with experimental parameter continuation...")  # pragma: no cover
 
         # mixed logarithmic-linear spacing
         finalRe = self._coefficient_handler.Re  # pragma: no cover
@@ -546,7 +547,8 @@ class StationaryProblem(ProblemBase):
         for Re in finalRange:  # pragma: no cover
             # modify dimensionless numbers
             self._coefficient_handler.modify_dimensionless_number("Re", Re)
-            self._micropolar_solver.set_equation_coefficients(self._coefficient_handler.equation_coefficients)
+            self._micropolar_solver.set_equation_coefficients(self._coefficient_handler.equation_coefficients["momentum"],
+                                                              self._coefficient_handler.equation_coefficients["spin"])
             # solve problem
             dlfn.info("Solving problem with Re = {0:.2f}".format(Re))
             self._micropolar_solver.solve()
