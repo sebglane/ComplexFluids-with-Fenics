@@ -5,62 +5,86 @@ __all__ = ['StabilizationParameterSD']
 
 _streamline_diffusion_cpp = """
 #include <pybind11/pybind11.h>
+
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/mesh/Vertex.h>
+
 using namespace dolfin;
+
 class StabilizationParameterSD : public Expression
 {
 public:
-  std::shared_ptr<GenericFunction> f_1, f_2;
   // constructor
   StabilizationParameterSD() : Expression() { }
-  void eval(Array<double>& values, const Array<double>& x,
-            const ufc::cell& c) const
-  {
-    // Get dolfin cell
-    // FIXME: Avoid dynamic allocation
-    dolfin_assert(f_1->function_space());
 
-    const std::shared_ptr<const Mesh> mesh = f_1->function_space()->mesh();
-    const std::shared_ptr<const FiniteElement> element = f_1->function_space()->element();
+  // function pointers    
+  std::shared_ptr<GenericFunction> function_01;
+  
+  std::shared_ptr<GenericFunction> function_02;
+  
+
+  // evaluate expression at a point in a cell
+  void eval(Array<double>       &values,
+            const Array<double> &x,
+            const ufc::cell     &ufl_cell) const
+  {
+    const unsigned int dim = x.size();
     
-    const Cell cell(*mesh, c.index);
-    double h = cell.h();
+    dolfin_assert(function_01->function_space());
+    dolfin_assert(function_02->function_space());
+
+    // get mesh
+    const std::shared_ptr<const Mesh> mesh = function_01->function_space()->mesh();
+    
+    // get finite element
+    const std::shared_ptr<const FiniteElement> element = function_01->function_space()->element();
+    
+    const Cell cell(*mesh, ufl_cell.index);
+    const double h = cell.h();
         
-    Array<double> vals_1(f_1->value_size());
-    Array<double> vals_2(f_2->value_size());
-    Array<double> x_(3);
-    
-    std::vector<double> coordinate_dofs;
-    boost::multi_array<double, 2> coords;
-    
-    
-    cell.get_coordinate_dofs(coordinate_dofs);
-    
-    
+    // get cell vertex coordinates (not coordinate dofs)
     std::vector<double> vertex_coords;
     cell.get_vertex_coordinates(vertex_coords);
+
+    // get cell coordinate dofs not vertex coordinates
+    std::vector<double> coordinate_dofs;
+    cell.get_coordinate_dofs(coordinate_dofs);    
     
+    // tabulate the coordinates of all dofs on an element
+    boost::multi_array<double, 2> coords;
     element->tabulate_dof_coordinates(coords, vertex_coords, cell);
 
-    double max_val = 0;
-    double sum_vals = 0;
+
+    dolfin_assert(function_01->value_size() == values.size());
+    dolfin_assert(function_01->value_size() == function_02->value_size());
+    const unsigned int n = function_values_01->value_size();
     
-    // Different for higher dimension, since all coordinates need to be updated
-    for(auto i = coords.origin(); i < (coords.origin() + coords.num_elements()); ++i)  
+    Array<double> function_values_01(n);
+    Array<double> function_values_02(n);
+    Array<double> max_values(n);
+    Array<double> x_(dim);
+    
+    // loop over all dof coordinates
+    for (auto i = coords.origin(); i < (coords.origin() + coords.num_elements()); ++i)  
     {
-        x_[0] = i[0];
-        
-        f_1->eval(vals_1, x_, c);
-        f_2->eval(vals_2, x_, c);
-        sum_vals = vals_1[0] + vals_2[0];
-        if (sum_vals > max_val)
-        {
-            max_val = sum_vals;
-        }
+     // assign current dof coordinate
+     for (unsigned int d=0; d<dim; ++d)
+       x_[d] = i[d];
+     
+     // evaluate functions at current dof coordinate
+     function_01->eval(function_values_01, x_, ufl_cell);
+     function_01->eval(function_values_02, x_, ufl_cell);
+     
+     // compute maximum for all components
+     for (unsigned int j=0; j<n; ++j)
+       max_val[j] = std::max(max_val[j], vals_1[j] + vals_2[j]);
     }
-    values[0] = max_val;
+    
+    // assign return value
+    for (unsigned int j=0; j<n; ++j)
+      values[j] = max_val[j];
+
   }
 };
 
