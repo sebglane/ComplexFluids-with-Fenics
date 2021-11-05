@@ -82,21 +82,16 @@ def get_max_local(function, degree_from, functionspace_from, functionspace_to, c
     )
     return max_local[dof_args_to]
 
-def calculate_NormE(Jh):
+def calculate_NormE(Jh, n_dofs):
     """
     Returns maximum value of entropy deviation ||E(J) - avg(E(J))||_max as FEA-approximation of infinity-norm on domain.
 
     :param Jh: Function, Inertia Tensor
     :return: float, maximum entropy deviation
     """
-    fspace = Jh.function_space()
-    n_dofs = fspace.dim()
-    NormE = dlfn.project(
-        dlfn.sqrt((entropy(Jh) - dlfn.project(entropy(Jh), fspace).vector().sum() / n_dofs) ** 2),
-        fspace
-    ).vector().max()
 
-    return NormE
+    E_var = entropy(Jh.vector()) - entropy(Jh.vector()).sum() / n_dofs
+    return np.sqrt(E_var * E_var).max()
 
 def calculate_NormD(D_norm, Jh, Jh_, Jh_n, dt, beta, degree):
     """
@@ -148,6 +143,16 @@ def min_func(f1, f2):
     :return:
     """
     return (f1+f2-abs(f1-f2))/dlfn.Constant(2.)
+
+def macaulay_func(f1, f2):
+    """
+    Return minimum of two functions.
+
+    :param f1:
+    :param f2:
+    :return:
+    """
+    return (f1-f2+abs(f1-f2))/dlfn.Constant(2.)
 
 class PeriodicBoundary(dlfn.SubDomain):
     def __init__(self, l):
