@@ -145,13 +145,6 @@ def min_func(f1, f2):
     return (f1+f2-abs(f1-f2))/dlfn.Constant(2.)
 
 def macaulay_func(f1, f2):
-    """
-    Return minimum of two functions.
-
-    :param f1:
-    :param f2:
-    :return:
-    """
     return (f1-f2+abs(f1-f2))/dlfn.Constant(2.)
 
 class PeriodicBoundary(dlfn.SubDomain):
