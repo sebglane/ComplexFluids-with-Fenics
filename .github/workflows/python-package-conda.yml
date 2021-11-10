@@ -15,7 +15,7 @@ jobs:
       with:
         python-version: 3.8
     - name: Checkout submodules
-      uses: textbook/git-checkout-submodule-action@2.1.1
+      uses: textbook/git-checkout-submodule-action@master
     - name: Install gmsh
       run: |
         sudo apt-get install gmsh
