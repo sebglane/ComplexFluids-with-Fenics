@@ -1,7 +1,5 @@
 import os.path
-import dolfin as dlfn
-from dolfin import dot, inner, grad, div, as_vector, Dx, sqrt, cross, bessel_I, lhs, rhs
-import numpy as np
+from dolfin import lhs, rhs
 from stabilization import *
 from classes_EV import *
 import matplotlib.pyplot as plt
@@ -9,32 +7,19 @@ import matplotlib.pyplot as plt
 # == Parameters ==================================
 # Polynomial Degree and DoFs
 p_deg = 1
-n_dofs = 200
+n_dofs_prescribed = 200
 
 # Domain
-nx = n_dofs // p_deg	# discretization points in x-direction
+nx = n_dofs_prescribed // p_deg	# discretization points in x-direction
 l = 1.
 h_k = l / nx
 
 # Transport Velocity
 u_0 = 1.
 
-# Time-dependent Parameters
-t_adaptive = 100
-dt = .1 * l / n_dofs / abs(u_0)
-dt_0 = dt * np.tanh(1 / t_adaptive)
-dT = dlfn.Constant(dt_0) # Can be updated via dt.assign(dt_new) ==> adaptive time-stepping
-E_norm = dlfn.Constant(0.0000001)
-t_end = 1.
-
-
 # E-V-Parameters
-c_e = 2.
-c_max = .02
-
-
-#
-c_e = c_e # Let c_e -> infty to find c_max
+c_e = .2
+c_max = .01
 Nu_max = abs(u_0) * h_k * c_max
 
 # Path
@@ -58,7 +43,17 @@ pbc = PeriodicBoundary(l)
 # Function Spaces Wh and Vh
 Wh = dlfn.FunctionSpace(mesh, "CG", p_deg, constrained_domain=pbc)
 Vh = dlfn.FunctionSpace(mesh, "DG", 0)
-#n_dofs = Wh.dim()
+n_dofs = Wh.dim()
+
+# Time-dependent Parameters
+t_adaptive = 100
+dt = .5 * l / n_dofs / abs(u_0)
+dt_0 = dt# * np.tanh(1 / t_adaptive)
+dT = dlfn.Constant(dt) # Can be updated via dt.assign(dt_new) ==> adaptive time-stepping
+E_norm = dlfn.Constant(0.0000001)
+t_end = 1.
+time_step = dlfn.Constant(0)
+
 
 dlfn.info("Number of cells {0}, number of DoFs: {1}".format(n_cells, n_dofs))
 
@@ -74,11 +69,7 @@ ki = dlfn.TrialFunction(Wh)
 
 # Solve for
 sol_J_h = dlfn.Function(Wh)
-
-k1_h = dlfn.Function(Wh)
-k2_h = dlfn.Function(Wh)
-k3_h = dlfn.Function(Wh)
-k4_h = dlfn.Function(Wh)
+kh = [dlfn.Function(Wh) for _ in range(4)]
 
 # == Buffer Functions ====================
 # Functions on Wh
@@ -107,25 +98,21 @@ dlfn.assign(sol_J_, J_0)
 dlfn.assign(sol_J_n, J_0_)
 dlfn.assign(sol_J_n_, J_0_n)
 
+u = dlfn.Function(Vh)
+dlfn.assign(u, dlfn.project(dlfn.Expression('u_0', u_0=u_0, degree=2), Vh))
+
 
 F_t = (sol_J - sol_J_) * del_J * dx
 
-F_1 = (ki * del_J + F_spatial_visc(sol_J_, del_J, u_0, Nu_max)) * dx
-F_2 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * k1_h, del_J, u_0, Nu_max)) * dx
-F_3 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * k2_h, del_J, u_0, Nu_max)) * dx
-F_4 = (ki * del_J + F_spatial_visc(sol_J_ + dT * k3_h, del_J, u_0, Nu_max)) * dx
+Nu_h = StabilizationParameter(sol_J_h, sol_J_n, sol_J_n_, u, c_e, Nu_max, dT, E_norm, time_step)
 
-# TODO: Use dolfin-ERK4 class
-Nu_h = StabilizationParameterSD(sol_J_h, sol_J_n, sol_J_n_, u_0, c_e, Nu_max, dT, E_norm)
-F_visc_1 = (ki * del_J + F_spatial_visc(sol_J_, del_J, u_0, Nu_h)) * dx
-F_visc_2 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * k1_h, del_J, u_0, Nu_h)) * dx
-F_visc_3 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * k2_h, del_J, u_0, Nu_h)) * dx
-F_visc_4 = (ki * del_J + F_spatial_visc(sol_J_ + dT * k3_h, del_J, u_0, Nu_h)) * dx
-
-#dlfn.multistage.multistagescheme.ERK4(F_visc_1, , bcs=pbc)
+F_visc_1 = (ki * del_J + F_spatial_visc(sol_J_, del_J, u, Nu_h)) * dx
+F_visc_2 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * kh[0], del_J, u, Nu_h)) * dx
+F_visc_3 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * kh[1], del_J, u, Nu_h)) * dx
+F_visc_4 = (ki * del_J + F_spatial_visc(sol_J_ + dT * kh[2], del_J, u, Nu_h)) * dx
 
 
-F = F_t - dT / 3. * (.5 * k1_h + k2_h + k3_h + .5 * k4_h) * del_J * dx
+F = F_t - dT / 3. * (.5 * kh[0] + kh[1] + kh[2] + .5 * kh[3]) * del_J * dx
 
 E_norm.assign(calculate_NormE(sol_J_h, n_dofs))
 
@@ -142,33 +129,23 @@ vtkfile_J2 << dlfn.project(Nu_h, Vh)
 t_i, i = 0., 0
 while t_i < t_end:
     print("time step {i}, time {t_i}".format(i=i, t_i=t_i))
-    # Adaptive time stepping and control parameters to overcome strong oscillations in the beginning
-    dT.assign(dt * np.tanh((i + 1) / t_adaptive))
-    #c_e.assign(c_e0 - (c_e0 - c_e_end) * np.tanh((i + 1) / t_adaptive))
-    #Nu_max.assign(h_k * abs(u_0) * (c_max0 - (c_max0 - c_max_end) * np.tanh((i + 1) / t_adaptive)))
+    # Adaptive time stepping to overcome strong oscillations in the beginning
+    #dT.assign(dt * np.tanh((i + 1) / t_adaptive))
     t_i += dT.values()[0]
+    time_step.assign(i)
     print(t_i)
-
-    #Nu_h = StabilizationParameterSD(sol_J_, sol_J_n, sol_J_n_, u_0, c_e, Nu_max, dT, E_norm)
 
     dlfn.assign(J_ana, dlfn.interpolate(Initial_Condition(p_deg, l, offset = t_i * u_0), Wh))
 
 
     # === Solve Problem ==========================
     # == RK4 ====================================
-    # TODO: Calculate E_Norm for every recursion step
     E_norm.assign(calculate_NormE(sol_J_h, n_dofs))
 
-    if i < 3:
-        dlfn.solve(lhs(F_1) == rhs(F_1), k1_h)
-        dlfn.solve(lhs(F_2) == rhs(F_2), k2_h)
-        dlfn.solve(lhs(F_3) == rhs(F_3), k3_h)
-        dlfn.solve(lhs(F_4) == rhs(F_4), k4_h)
-    else:
-        dlfn.solve(lhs(F_visc_1) == rhs(F_visc_1), k1_h)
-        dlfn.solve(lhs(F_visc_2) == rhs(F_visc_2), k2_h)
-        dlfn.solve(lhs(F_visc_3) == rhs(F_visc_3), k3_h)
-        dlfn.solve(lhs(F_visc_4) == rhs(F_visc_4), k4_h)
+    dlfn.solve(lhs(F_visc_1) == rhs(F_visc_1), kh[0])
+    dlfn.solve(lhs(F_visc_2) == rhs(F_visc_2), kh[1])
+    dlfn.solve(lhs(F_visc_3) == rhs(F_visc_3), kh[2])
+    dlfn.solve(lhs(F_visc_4) == rhs(F_visc_4), kh[3])
 
     dlfn.solve(lhs(F) == rhs(F), sol_J_h)
 
