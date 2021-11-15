@@ -316,12 +316,6 @@ class ProblemBase:
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    def set_angular_velocity(self):  # pragma: no cover
-        """
-        Virtual method for specifying the angular velocity of the rotating system.
-        """
-        pass
-
     def set_boundary_conditions(self):  # pragma: no cover
         """
         Virtual method for specifying the boundary conditions of the
@@ -458,9 +452,6 @@ class StationaryProblem(ProblemBase):
 
         # setup internal constraints
         self.set_internal_constraints()
-
-        # setup angular velocity
-        self.set_angular_velocity()
 
         # setup boundary conditions
         self.set_boundary_conditions()

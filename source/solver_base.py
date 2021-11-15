@@ -176,46 +176,6 @@ class SolverBase:
 
         return F
 
-    def _add_coriolis_acceleration(self, F, velocity, w):
-        if not hasattr(self, "_angular_velocity"):
-            return F
-        # input check
-        assert hasattr(self, "_momentum_coefficients")
-        if self._momentum_coefficients["coriolis_term"] is None:  # pragma: no cover
-            raise RuntimeError()
-        assert isinstance(velocity, self._form_function_types)
-        assert isinstance(w, self._form_function_types)
-        omega = self._angular_velocity.value
-        dV = dlfn.Measure("dx", domain=self._mesh)
-        if self._space_dim == 2:
-            F += dlfn.Constant(2.0) * self._momentum_coefficients["coriolis_term"] * omega * \
-                    dot(dlfn.as_vector((-velocity[1], velocity[0])), w) * dV
-        else:  # pragma: no cover
-            assert len(self._Omega) == 3
-            F += dlfn.Constant(2.0) * self._momentum_coefficients["coriolis_term"] * \
-                dot(dlfn.cross(omega, velocity), w) * dV
-        return F
-
-    def _add_euler_acceleration(self, F, w):
-        if not hasattr(self, "_angular_velocity"):
-            return F
-        # input check
-        assert hasattr(self, "_momentum_coefficients")
-        if self._momentum_coefficients["euler_term"] is None:  # pragma: no cover
-            raise RuntimeError()
-        assert isinstance(w, self._form_function_types)
-        alpha = self._angular_velocity.derivative
-        if alpha is None:
-            return F
-        else:  # pragma: no cover
-            x = dlfn.SpatialCoordinate(self._mesh)
-            dV = dlfn.Measure("dx", domain=self._mesh)
-            if self._space_dim == 2:
-                F += self._momentum_coefficients["euler_term"] * dot(alpha * dlfn.as_vector((-x[1], x[0])), w) * dV
-            else:
-                F += self._momentum_coefficients["euler_term"] * dot(dlfn.cross(alpha, x), w) * dV
-            return F
-
     def _check_boundary_condition_format(self, bc, internal_constraint=False):
         """
         Check the general format of an arbitrary boundary condition.
@@ -623,19 +583,6 @@ class SolverBase:
         assert hasattr(self, "_field_association")
         return self._field_association
 
-    def set_angular_velocity(self, angular_velocity):
-        """
-        Specifies the body force.
-
-        Parameters
-        ----------
-        body_force : auxiliary_classes.AngularVelocityVector
-            The angular velocity vector.
-        """
-        assert isinstance(angular_velocity, AngularVelocityVector)
-        assert angular_velocity.space_dim == self._space_dim
-        self._angular_velocity = angular_velocity
-
     def set_body_force(self, body_force):
         """
         Specifies the body force.
@@ -932,10 +879,6 @@ class StationarySolverBase(SolverBase):
         F_momentum = self._add_boundary_tractions(F_momentum, w)
         # add body force term
         F_momentum = self._add_body_forces(F_momentum, w)
-        # add Coriolis acceleration
-        F_momentum = self._add_coriolis_acceleration(F_momentum, sol_v, w)
-        # add Euler acceleration
-        F_momentum = self._add_euler_acceleration(F_momentum, w)
 
         self._F = F_mass + F_momentum + F_spin
 
