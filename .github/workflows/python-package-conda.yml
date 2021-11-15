@@ -9,13 +9,14 @@ jobs:
       max-parallel: 5
 
     steps:
+    - name: Checkout repository and submodules
     - uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
         python-version: 3.8
-    - name: Checkout submodules
-      uses: textbook/git-checkout-submodule-action@master
     - name: Install gmsh
       run: |
         sudo apt-get install gmsh
