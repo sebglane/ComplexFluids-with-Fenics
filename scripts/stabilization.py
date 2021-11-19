@@ -7,7 +7,7 @@ _entropy_viscosity_cpp = """
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/mesh/Vertex.h>
-#include <cmath>
+#include <dolfin/mesh/Edge.h>
 using namespace dolfin;
 class StabilizationParameter : public Expression
 {
@@ -65,7 +65,7 @@ public:
     }
 
     const Cell cell(*mesh, c.index);
-    const double h = cell.h();
+    double h = cell.h();
 
     // get cell vertex coordinates (not coordinate dofs)
     std::vector<double> vertex_coords;
@@ -118,6 +118,13 @@ public:
     double Dh_x;
     double max_Dh = 0;
     
+    // find smallest edge on cell
+    if (dim > 1) {
+        for(EdgeIterator edge(cell); !edge.end(); ++edge) {
+            h = std::min(h, edge->length());
+        }
+    }
+    
    	// coordinate vector (for function evaluation) and array (for basis derivative evaluation)
     std::vector<double> x_(dim);
     Array<double> x_function(dim);
@@ -145,8 +152,8 @@ public:
         // aggregate J
         for (unsigned int f=0; f<n; ++f) {
             vals_J_all[i][f] = vals_J[f];
-            vals_J_old_all[i][f] = vals_J[f];
-            vals_J_old_old_all[i][f] = vals_J[f];
+            vals_J_old_all[i][f] = vals_J_old[f];
+            vals_J_old_old_all[i][f] = vals_J_old_old[f];
         }
         
         // get basis derivatives at node
@@ -170,7 +177,7 @@ public:
                 // iterate over spatial dimensions
                 for(unsigned int d=0; d<dim; ++d) {
                     // compute (beta_d * dJ_f / x_d)| at x_k (k-th node on element)
-                    derivatives[i][f] += 0.5 * vals_beta_all[i][d] * basis_derivatives_matrix[i][k * dim + d] * pow(vals_J_all[k][f], 2);
+                    derivatives[i][f] += vals_beta_all[i][d] * basis_derivatives_matrix[i][k * dim + d] * vals_J_all[k][f];
                 }
                 
                 // if derivative at point x_k is computed, assign max entropy residual of cell
@@ -183,7 +190,7 @@ public:
                         max_Dh = std::max(abs(Dh_t + Dh_x), max_Dh);
                     } else {
                         Dh_t = 0.25 * (3. * pow(vals_J_all[i][f], 2) - 4. * pow(vals_J_old_all[i][f], 2) + pow(vals_J_old_old_all[i][f], 2)) / val_dt[0];
-                        Dh_x = derivatives[i][f];
+                        Dh_x = vals_J_all[i][f] * derivatives[i][f];                        
                         max_Dh = std::max(abs(Dh_t + Dh_x), max_Dh);
                     }
                 }
