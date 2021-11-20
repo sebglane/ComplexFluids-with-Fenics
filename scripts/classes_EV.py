@@ -1,4 +1,5 @@
 import dolfin as dlfn
+import ufl
 from dolfin import inner, Dx, div, grad, outer
 import numpy as np
 
@@ -32,9 +33,11 @@ def F_spatial(sol_, del_, beta):
     :param beta: float, transport velocity
     :return: Form,
     """
-    if sol_.ufl_shape == ():
+    if beta.ufl_shape == ():
+        print("Dimension = 1")
         return inner(Dx(beta * sol_, 0), del_)
     else:
+        print("Dimension > 1")
         return inner(div(outer(sol_, beta)), del_)
 
 def F_spatial_visc(sol_, del_, beta, Nu):
@@ -61,18 +64,8 @@ def calculate_NormE(Jh, n_dofs):
     return np.sqrt(E_var * E_var).max()
 
 
-def min_func(f1, f2):
-    """
-    Return minimum of two functions.
-
-    :param f1:
-    :param f2:
-    :return:
-    """
-    return (f1+f2-abs(f1-f2))/dlfn.Constant(2.)
-
 def macaulay_func(f1, f2):
-    return (f1-f2+abs(f1-f2))/dlfn.Constant(2.)
+    return ufl.max_value(f1, f2) - f2# (f1-f2+abs(f1-f2))/dlfn.Constant(2.)
 
 class PeriodicBoundary(dlfn.SubDomain):
     def __init__(self, l):
