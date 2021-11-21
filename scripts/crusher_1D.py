@@ -20,15 +20,15 @@ t_adaptive = 100
 dt = .5 / nx / p_deg / abs(u_0)
 dT = dlfn.Constant(dt) # Can be updated via dt.assign(dt_new) ==> adaptive time-stepping
 E_norm = dlfn.Constant(0.0000001)
-t_end = 5.
+t_end = 4.
 
 dt_0 = dt
 
 time_step = dlfn.Constant(0)
 
 # E-V-Parameters
-c_e = .25 # Let c_e -> infty to find c_max
-c_max = .15
+c_e = 2. # Let c_e -> infty to find c_max
+c_max = .3
 
 # crusher parameters
 J_0 = 1.
@@ -167,7 +167,7 @@ class crusher_region(dlfn.UserExpression):
         else:
             values[0] = 0.
 
-chi_h = -crusher_region(delta) * dlfn.conditional(sol_h.sub(0) > .001, 1., 0.) * alpha * (dlfn.conditional(sol_h.sub(1) > J_crit, sol_h.sub(1) - J_crit, 0))
+chi_h = -crusher_region(delta) * dlfn.conditional(sol_h.sub(0) > .001, 1., 0.) * alpha * (dlfn.conditional(sol_h.sub(1) > J_crit, sol_h.sub(1) - J_crit, 0.))
 
 # == Initial J and rho =================
 rho_0_Expr = Initial_rho(delta, rho_0)
@@ -193,20 +193,20 @@ Nu_h_J = StabilizationParameter(sol_h.sub(1), sol_n.sub(1), sol_n_.sub(1), u, c_
 F_t_rho = (sol_rho - sol_rho_h) * del_rho * dx
 F_t_J = (sol_J - sol_J_h) * del_J * dx
 
-F_rho_1 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0), del_rho, u_0, Nu_h_rho)) * dx
-F_J_1 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1), del_J, u_0, Nu_h_J, chi_h)) * dx
+F_rho_1 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0), del_rho, u, Nu_h_rho)) * dx
+F_J_1 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1), del_J, u, Nu_h_J, chi_h)) * dx
 F_1 = F_rho_1 + F_J_1
 
-F_rho_2 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0) + .5 * dT * kh_rho[0], del_rho, u_0, Nu_h_rho)) * dx
-F_J_2 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1) + .5 * dT * kh_J[0], del_J, u_0, Nu_h_J, chi_h)) * dx
+F_rho_2 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0) + .5 * dT * kh_rho[0], del_rho, u, Nu_h_rho)) * dx
+F_J_2 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1) + .5 * dT * kh_J[0], del_J, u, Nu_h_J, chi_h)) * dx
 F_2 = F_rho_2 + F_J_2
 
-F_rho_3 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0) + .5 * dT * kh_rho[1], del_rho, u_0, Nu_h_rho)) * dx
-F_J_3 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1) + .5 * dT * kh_J[1], del_J, u_0, Nu_h_J, chi_h)) * dx
+F_rho_3 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0) + .5 * dT * kh_rho[1], del_rho, u, Nu_h_rho)) * dx
+F_J_3 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1) + .5 * dT * kh_J[1], del_J, u, Nu_h_J, chi_h)) * dx
 F_3 = F_rho_3 + F_J_3
 
-F_rho_4 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0) + dT * kh_rho[2], del_rho, u_0, Nu_h_rho)) * dx
-F_J_4 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1) + dT * kh_J[2], del_J, u_0, Nu_h_J, chi_h)) * dx
+F_rho_4 = (ki_rho * del_rho + F_spatial_visc(sol_h.sub(0) + dT * kh_rho[2], del_rho, u, Nu_h_rho)) * dx
+F_J_4 = (ki_J * del_J + F_spatial_visc_chi(sol_h.sub(1) + dT * kh_J[2], del_J, u, Nu_h_J, chi_h)) * dx
 F_4 = F_rho_4 + F_J_4
 
 F_rho = F_t_rho - dT / 3. * (.5 * kh_rho[0] + kh_rho[1] + kh_rho[2] + .5 * kh_rho[3]) * del_rho * dx
@@ -246,10 +246,10 @@ while t_i < t_end:
 
 
 
-    dlfn.solve(lhs(F_1) == rhs(F_1), kh[0], bcs=bcs)
-    dlfn.solve(lhs(F_2) == rhs(F_2), kh[1], bcs=bcs)
-    dlfn.solve(lhs(F_3) == rhs(F_3), kh[2], bcs=bcs)
-    dlfn.solve(lhs(F_4) == rhs(F_4), kh[3], bcs=bcs)
+    dlfn.solve(lhs(F_1) == rhs(F_1), kh[0])
+    dlfn.solve(lhs(F_2) == rhs(F_2), kh[1])
+    dlfn.solve(lhs(F_3) == rhs(F_3), kh[2])
+    dlfn.solve(lhs(F_4) == rhs(F_4), kh[3])
 
     dlfn.solve(lhs(F) == rhs(F), sol_h, bcs=bcs)
 
