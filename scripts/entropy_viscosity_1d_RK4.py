@@ -10,7 +10,7 @@ p_deg = 1
 n_dofs_prescribed = 200
 
 # Domain
-nx = n_dofs_prescribed // p_deg	# discretization points in x-direction
+nx = n_dofs_prescribed // p_deg  # discretization points in x-direction
 l = 1.
 h_k = l / nx
 
@@ -18,9 +18,8 @@ h_k = l / nx
 u_0 = 1.
 
 # E-V-Parameters
-c_e = .2
-c_max = .01
-Nu_max = abs(u_0) * h_k * c_max
+c_e = 2.
+c_max = .1
 
 # Path
 path = os.path.relpath('results/ev_p{p}_ce{ce:.3f}_cmax{cmax:.3f}'.format(p=p_deg, ce=c_e, cmax=c_max))
@@ -48,8 +47,8 @@ n_dofs = Wh.dim()
 # Time-dependent Parameters
 t_adaptive = 100
 dt = .5 * l / n_dofs / abs(u_0)
-dt_0 = dt# * np.tanh(1 / t_adaptive)
-dT = dlfn.Constant(dt) # Can be updated via dt.assign(dt_new) ==> adaptive time-stepping
+dt_0 = dt
+dT = dlfn.Constant(dt)
 E_norm = dlfn.Constant(0.0000001)
 t_end = 1.
 time_step = dlfn.Constant(0)
@@ -104,12 +103,12 @@ dlfn.assign(u, dlfn.project(dlfn.Expression('u_0', u_0=u_0, degree=2), Vh))
 
 F_t = (sol_J - sol_J_) * del_J * dx
 
-Nu_h = StabilizationParameter(sol_J_h, sol_J_n, sol_J_n_, u, c_e, Nu_max, dT, E_norm, time_step)
+Nu_h = StabilizationParameter(sol_J_h, sol_J_n, sol_J_n_, u, c_e, c_max, dT, E_norm, time_step)
 
-F_visc_1 = (ki * del_J + F_spatial_visc(sol_J_, del_J, u, Nu_h)) * dx
-F_visc_2 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * kh[0], del_J, u, Nu_h)) * dx
-F_visc_3 = (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * kh[1], del_J, u, Nu_h)) * dx
-F_visc_4 = (ki * del_J + F_spatial_visc(sol_J_ + dT * kh[2], del_J, u, Nu_h)) * dx
+F_visc = [(ki * del_J + F_spatial_visc(sol_J_, del_J, u, Nu_h)) * dx,
+          (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * kh[0], del_J, u, Nu_h)) * dx,
+          (ki * del_J + F_spatial_visc(sol_J_ + .5 * dT * kh[1], del_J, u, Nu_h)) * dx,
+          (ki * del_J + F_spatial_visc(sol_J_ + dT * kh[2], del_J, u, Nu_h)) * dx]
 
 
 F = F_t - dT / 3. * (.5 * kh[0] + kh[1] + kh[2] + .5 * kh[3]) * del_J * dx
@@ -129,26 +128,22 @@ vtkfile_J2 << dlfn.project(Nu_h, Vh)
 t_i, i = 0., 0
 while t_i < t_end:
     print("time step {i}, time {t_i}".format(i=i, t_i=t_i))
-    # Adaptive time stepping to overcome strong oscillations in the beginning
-    #dT.assign(dt * np.tanh((i + 1) / t_adaptive))
     t_i += dT.values()[0]
     time_step.assign(i)
     print(t_i)
 
     dlfn.assign(J_ana, dlfn.interpolate(Initial_Condition(p_deg, l, offset = t_i * u_0), Wh))
 
-
     # === Solve Problem ==========================
     # == RK4 ====================================
     E_norm.assign(calculate_NormE(sol_J_h, n_dofs))
 
-    dlfn.solve(lhs(F_visc_1) == rhs(F_visc_1), kh[0])
-    dlfn.solve(lhs(F_visc_2) == rhs(F_visc_2), kh[1])
-    dlfn.solve(lhs(F_visc_3) == rhs(F_visc_3), kh[2])
-    dlfn.solve(lhs(F_visc_4) == rhs(F_visc_4), kh[3])
+    dlfn.solve(lhs(F_visc[0]) == rhs(F_visc[0]), kh[0])
+    dlfn.solve(lhs(F_visc[1]) == rhs(F_visc[1]), kh[1])
+    dlfn.solve(lhs(F_visc[2]) == rhs(F_visc[2]), kh[2])
+    dlfn.solve(lhs(F_visc[3]) == rhs(F_visc[3]), kh[3])
 
     dlfn.solve(lhs(F) == rhs(F), sol_J_h)
-
 
     # === Assign to Buffer Functions =============
     dlfn.assign(sol_J_n_, sol_J_n)
