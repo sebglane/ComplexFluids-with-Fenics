@@ -3,7 +3,6 @@
 from auxiliary_classes import CustomNonlinearProblem
 from auxiliary_methods import boundary_normal
 from auxiliary_methods import extract_all_boundary_markers
-from auxiliary_classes import AngularVelocityVector
 import dolfin as dlfn
 from dolfin import cross, curl, div, dot, grad, inner
 from enum import Enum, auto

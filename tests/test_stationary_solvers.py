@@ -71,7 +71,7 @@ class CavityProblem(StationaryProblem):
         self._add_to_field_output(self._compute_stream_potential())
         # add relative angular to the field output
         self._add_to_field_output(self._compute_relative_angular_velocity())
-        
+
 
 class CouetteProblem(StationaryProblem):
     """Couette flow problem with periodic boundary conditions in x-direction."""
@@ -155,7 +155,7 @@ class ChannelFlowProblem(StationaryProblem):
         function_pressure = PressureBCType.function
         constant_spin = OmegaBCType.constant
         function_spin = OmegaBCType.function
-        
+
         self._bcs = [(function_spin, Markers.left.value, inlet_omega),
                      (constant_spin, Markers.top.value, 0.0),
                      (constant_spin, Markers.bottom.value, 0.0)]
@@ -203,11 +203,18 @@ def test_cavity():
     cavity_flow = CavityProblem(25)
     cavity_flow.solve_problem()
 
+
 def test_channel_flow():
     for bc_type in ("inlet", "inlet_pressure", "inlet_component"):
-        print(bc_type)
         channel_flow = ChannelFlowProblem(10, bc_type=bc_type)
         channel_flow.solve_problem()
+
+
+def test_channel_flow_convective_term():
+    for form_convective_term in ("standard", "rotational", "divergence", "skew_symmetric"):
+        channel_flow = ChannelFlowProblem(10, form_convective_term=form_convective_term)
+        channel_flow.solve_problem()
+
 
 def test_couette_flow():
     couette_flow = CouetteProblem(10)
@@ -217,4 +224,5 @@ def test_couette_flow():
 if __name__ == "__main__":
     test_cavity()
     test_channel_flow()
+    test_channel_flow_convective_term()
     test_couette_flow()

@@ -531,10 +531,8 @@ class StationaryProblem(ProblemBase):
         # mixed logarithmic-linear spacing
         finalRe = self._coefficient_handler.Re  # pragma: no cover
         assert finalRe is not None  # pragma: no cover
-        logRange = np.logspace(np.log10(10.0), np.log10(finalRe),
-                                num=8, endpoint=True)  # pragma: no cover
-        linRange = np.linspace(logRange[-2], finalRe,
-                                num=8, endpoint=True)  # pragma: no cover
+        logRange = np.logspace(np.log10(10.0), np.log10(finalRe), num=8, endpoint=True)  # pragma: no cover
+        linRange = np.linspace(logRange[-2], finalRe, num=8, endpoint=True)  # pragma: no cover
         finalRange = np.concatenate((logRange[:-2], linRange))  # pragma: no cover
         for Re in finalRange:  # pragma: no cover
             # modify dimensionless numbers
