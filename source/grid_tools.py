@@ -41,11 +41,12 @@ def _create_meshio_mesh(mesh, cell_type, prune_z=False):  # pragma: no cover
     else:  # pragma: no cover
         raise RuntimeError()
     # create mesh object
-    out_mesh = meshio.Mesh(points=mesh.points, cells={cell_type: cells},
-                           cell_data={data_name: [cell_data]})
-    # remove z-component
     if prune_z:
-        out_mesh.prune_z_0()
+        out_mesh = meshio.Mesh(points=mesh.points[:,:2], cells={cell_type: cells},
+               cell_data={data_name: [cell_data]})
+    else:
+        out_mesh = meshio.Mesh(points=mesh.points, cells={cell_type: cells},
+                       cell_data={data_name: [cell_data]})
     return out_mesh
 
 
