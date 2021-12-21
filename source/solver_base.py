@@ -196,7 +196,7 @@ class SolverBase:
             if isinstance(bc[0], OmegaBCType):
                 if self._space_dim == 2:
                     rank = 0
-                else:
+                else: # pragma: no cover
                     rank = 1
             else:
                 rank = 1
@@ -362,7 +362,7 @@ class SolverBase:
         elemOmega = None
         if self._space_dim == 2:
             elemOmega = dlfn.FiniteElement("CG", cell, self._omega_deg)
-        else:
+        else: # pragma: no cover
             elemOmega = dlfn.VectorElement("CG", cell, self._omega_deg)
 
         # element
@@ -565,7 +565,7 @@ class SolverBase:
 
         return self._spin_coefficients["viscous_term"] * inner(grad(u), grad(v))
 
-    def _vol_viscous_term_spin(self, u, v):
+    def _vol_viscous_term_spin(self, u, v): # pragma: no cover
         assert hasattr(self, "_spin_coefficients")
         if self._spin_coefficients["viscous_term"] is None:  # pragma: no cover
             raise RuntimeError()
@@ -574,7 +574,7 @@ class SolverBase:
 
         if self._space_dim == 2:
             raise RuntimeError("Possible in two dimensions!")
-        else:
+        else: # pragma: no cover
             return self._spin_coefficients["vol_viscous_term"] * div(u) * div(v)
 
     @property
@@ -612,7 +612,7 @@ class SolverBase:
         assert isinstance(volume_couple, (dlfn.Expression, dlfn.Constant))
         if self._space_dim == 2:
             rank = 0
-        else:
+        else: # pragma: no cover
             rank = 1
         if isinstance(volume_couple, dlfn.Expression):
             assert volume_couple.value_rank() == rank
@@ -879,7 +879,7 @@ class StationarySolverBase(SolverBase):
                           + self._viscous_term_spin(sol_omega, alpha)
                           - self._coupling_term_spin(sol_v, sol_omega, alpha)
                           ) * dV
-        else:
+        else: # pragma: no cover
             if self._spin_coefficients["coupling_term"] is None:
                 F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
                           + self._vol_viscous_term_spin(sol_omega, alpha)
@@ -921,7 +921,7 @@ class StationarySolverBase(SolverBase):
                                  + self._viscous_term(omega, alpha)
                                  + self._spin_coefficients["coupling_term"] * self._two * omega * alpha
                                  ) * dV
-        else:
+        else: # pragma: no cover
             if self._spin_coefficients["coupling_term"] is None:
                 J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
                                  + self._vol_viscous_term_spin(omega, alpha)
