@@ -37,7 +37,7 @@ class CavityProblem(StationaryProblem):
         self._mesh, self._boundary_markers = hyper_cube(2, self._n_points)
 
     def set_boundary_conditions(self):
-        # velocity boundary conditions
+        # boundary conditions
         no_slip = VelocityBCType.no_slip
         constant = VelocityBCType.constant
         constant_spin = OmegaBCType.constant
@@ -68,6 +68,41 @@ class CavityProblem(StationaryProblem):
         self._add_to_field_output(self._compute_stream_potential())
         # add relative angular to the field output
         self._add_to_field_output(self._compute_relative_angular_velocity())
+        
+
+class CouetteProblem(StationaryProblem):
+    """Couette flow problem with periodic boundary conditions in x-direction."""
+    def __init__(self, n_points, main_dir=None):
+        super().__init__(main_dir)
+
+        self._n_points = n_points
+        self._problem_name = "Couette"
+
+    def setup_mesh(self):
+        # create mesh
+        self._mesh, self._boundary_markers = hyper_cube(2, self._n_points)
+
+    def set_boundary_conditions(self):
+        # boundary conditions
+        no_slip = VelocityBCType.no_slip
+        constant_component = VelocityBCType.constant_component
+        no_normal_flux = VelocityBCType.no_normal_flux
+        constant_spin = OmegaBCType.constant
+        BoundaryMarkers = HyperCubeBoundaryMarkers
+        self._bcs = ((no_slip, BoundaryMarkers.bottom.value, None),
+                     (constant_component, BoundaryMarkers.top.value, 0, 1.0),
+                     (no_normal_flux, BoundaryMarkers.top.value, None),
+                     (constant_spin, BoundaryMarkers.top.value, None),
+                     (constant_spin, BoundaryMarkers.bottom.value, None))
+
+    def set_equation_coefficients(self):
+        self._coefficient_handler = EquationCoefficientHandler(Re=1.0)
+
+    def set_periodic_boundary_conditions(self):
+        """Set periodic boundary condition in x-direction."""
+        self._periodic_bcs = PeriodicDomain()
+        self._periodic_boundary_ids = (HyperCubeBoundaryMarkers.left.value,
+                                       HyperCubeBoundaryMarkers.right.value)
 
 
 def test_cavity():
@@ -75,5 +110,11 @@ def test_cavity():
     cavity_flow.solve_problem()
 
 
+def test_couette_flow():
+    couette_flow = CouetteProblem(10)
+    couette_flow.solve_problem()
+
+
 if __name__ == "__main__":
     test_cavity()
+    test_couette_flow()
