@@ -2,9 +2,120 @@
 # -*- coding: utf-8 -*-
 from dolfin import NonlinearProblem
 from dolfin import SystemAssembler
+from dolfin import Constant
 import math
 
-__all__ = ["CustomNonlinearProblem", "EquationCoefficientHandler"]
+
+__all__ = ["AngularVelocityVector", "CustomNonlinearProblem",
+           "EquationCoefficientHandler"]
+
+
+class AngularVelocityVector:
+    def __init__(self, space_dim=2, function=None):
+        # input check
+        assert isinstance(space_dim, int)
+        assert space_dim in (2, 3)
+        self._space_dim = space_dim
+        self._current_time = 0.0
+        # set value size
+        if self._space_dim == 2:
+            self._value_size = 1
+        else:
+            self._value_size = 3
+        # set function
+        if function is not None:
+            self.set_angular_velocity_function(function)
+
+    def _modify_time(self):
+        assert hasattr(self, "_omega")
+        omega_value = self._angular_velocity.value()
+        self._omega.assign(Constant(omega_value))
+        assert hasattr(self, "_alpha")
+        if self._alpha is not None:
+            alpha_value = self._angular_velocity.derivative()
+            self._alpha.assign(Constant(alpha_value))
+
+    def _setup_angular_acceleration(self):
+        assert hasattr(self, "_angular_velocity")
+        derivative_exists = True
+        try:
+            _ = self._angular_velocity.derivative()
+        except RuntimeError:
+            derivative_exists = False
+        except Exception:  # pragma: no cover
+            raise RuntimeError()
+        if derivative_exists:
+            derivative_value = self._angular_velocity.derivative()
+            self._alpha = Constant(derivative_value)
+        else:
+            self._alpha = None
+
+    def _setup_angular_velocity(self):
+        assert hasattr(self, "_angular_velocity")
+        value = self._angular_velocity.value()
+        self._omega = Constant(value)
+
+    def set_angular_velocity_function(self, function):
+        assert isinstance(function, FunctionTime)
+        if self._space_dim == 2:
+            assert function.value_size == 1
+        else:
+            assert function.value_size == 3
+        self._angular_velocity = function
+        self._setup_angular_velocity()
+        self._setup_angular_acceleration()
+
+    def set_time(self, current_time):
+        assert isinstance(current_time, float)
+        assert current_time >= self._current_time
+        self._current_time = current_time
+        self._angular_velocity.set_time(self._current_time)
+        self._modify_time()
+
+    @property
+    def derivative(self):
+        assert hasattr(self, "_alpha")
+        return self._alpha
+
+    @property
+    def space_dim(self):
+        return self._space_dim
+
+    @property
+    def value(self):
+        assert hasattr(self, "_omega")
+        return self._omega
+
+
+class FunctionTime:
+    def __init__(self, value_size, current_time=0.0):
+        # input check
+        assert isinstance(value_size, int)
+        assert value_size > 0
+        self._value_size = value_size
+        assert isinstance(current_time, float)
+        self._current_time = 0.0
+
+    def derivative(self):  # pragma: no cover
+        """
+        Purely virtual method returning the time derivative of the function.
+        """
+        raise NotImplementedError("You are calling a purely virtual method.")
+
+    def set_time(self, current_time):
+        assert isinstance(current_time, float)
+        assert current_time >= self._current_time
+        self._current_time = current_time
+
+    def value(self):  # pragma: no cover
+        """
+        Purely virtual method returning the value of the function.
+        """
+        raise NotImplementedError("You are calling a purely virtual method.")
+
+    @property
+    def value_size(self):
+        return self._value_size
 
 
 class CustomNonlinearProblem(NonlinearProblem):
@@ -61,8 +172,8 @@ class EquationCoefficientHandler():
         self._read_dimensionless_number(kwargs, "Fr", "Froude")
         self._read_dimensionless_number(kwargs, "Ro", "Rossby")
         self._read_dimensionless_number(kwargs, "Ek", "Ekman")
-        self._read_dimensionless_number(kwargs, "L", "L")
-        self._read_dimensionless_number(kwargs, "M", "M")
+        self._read_dimensionless_number(kwargs, "L", None)
+        self._read_dimensionless_number(kwargs, "M", None)
         self._read_dimensionless_number(kwargs, "N", "Coupling number")
         self._read_dimensionless_number(kwargs, "Th", "Inertia number")
         self._closed = False
@@ -175,6 +286,7 @@ class EquationCoefficientHandler():
     def _compute_equation_coefficients(self):
         assert hasattr(self, "_dimensionless_numbers")
 
+        # hydrodynamic case
         if not any(x in self._dimensionless_numbers for x in ("L", "M", "N", "Th")):
 
             if not hasattr(self, "_equation_coefficients"):
@@ -226,6 +338,7 @@ class EquationCoefficientHandler():
                 coefficients["body_force_term"] = 1.0 / self._dimensionless_numbers["Fr"]**2
             else:
                 coefficients["body_force_term"] = None
+        # micropolar case
         else:
             assert all(x not in self._dimensionless_numbers for x in ("Ek", "Ro"))
 
@@ -245,8 +358,9 @@ class EquationCoefficientHandler():
                                                         self._dimensionless_numbers["Re"]
             else:  # pragma: no cover
                 raise RuntimeError()
-            momentum_coefficients["coupling_term"] = self._dimensionless_numbers["N"]**2 / \
-                (1.0 - self._dimensionless_numbers["N"]**2)
+            if self._dimensionless_numbers["N"] > 0.0:
+                momentum_coefficients["coupling_term"] = self._dimensionless_numbers["N"]**2 / \
+                    (1.0 - self._dimensionless_numbers["N"]**2)
 
             spin_coefficients = self._equation_coefficients["spin"]
             spin_coefficients["convective_term"] = 1.0
@@ -260,13 +374,15 @@ class EquationCoefficientHandler():
                 spin_coefficients["vol_viscous_term"] = 1.0 / self._dimensionless_numbers["M"]**2 / \
                                                         self._dimensionless_numbers["Re"] / \
                                                         self._dimensionless_numbers["Th"]
-            spin_coefficients["coupling_term"] = momentum_coefficients["coupling_term"]
+            if "coupling_term" in momentum_coefficients:
+                spin_coefficients["coupling_term"] = momentum_coefficients["coupling_term"]
 
     def _read_dimensionless_number(self, d, key, alternative_key):
         assert hasattr(self, "_dimensionless_numbers")
         assert isinstance(d, dict)
         assert isinstance(key, str)
-        assert isinstance(alternative_key, str)
+        if alternative_key is not None:
+            assert isinstance(alternative_key, str)
         value = None
         if key in d:  # pragma: no cover
             assert alternative_key not in d
@@ -276,7 +392,10 @@ class EquationCoefficientHandler():
             value = d[alternative_key]
         if value is not None:
             assert math.isfinite(value)
-            assert value > 0.0
+            if key not in ("N"):
+                assert value > 0.0
+            else:
+                assert value >= 0.0
             self._dimensionless_numbers[key] = value
 
     def _set_dimensionless_number(self, key, value):
