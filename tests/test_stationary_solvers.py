@@ -112,7 +112,8 @@ class CouetteProblem(StationaryProblem):
 class ChannelFlowProblem(StationaryProblem):
     def __init__(self, n_points, main_dir=None, bc_type="inlet",
                  form_convective_term="standard"):
-        super().__init__(main_dir, form_convective_term=form_convective_term)
+        super().__init__(main_dir, form_convective_term=form_convective_term,
+                         tol_picard=1e6)
 
         assert isinstance(n_points, int)
         assert n_points > 0
@@ -182,7 +183,7 @@ class ChannelFlowProblem(StationaryProblem):
             self._bcs.append((constant_pressure, Markers.right.value, 0.0))
 
     def set_equation_coefficients(self):
-        self._coefficient_handler = EquationCoefficientHandler(Re=200.0, N=0.0,
+        self._coefficient_handler = EquationCoefficientHandler(Re=100.0, N=0.25,
                                                                L=0.4, Th=1.0e-3)
 
     def postprocess_solution(self):
@@ -214,6 +215,6 @@ def test_couette_flow():
 
 
 if __name__ == "__main__":
-    # test_cavity()
+    test_cavity()
     test_channel_flow()
-    # test_couette_flow()
+    test_couette_flow()
