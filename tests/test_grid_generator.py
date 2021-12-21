@@ -69,10 +69,10 @@ def test_extract_boundary_markers():
     subprocess.run(["rm", geo_file], check=True)
 
 
-def test_external_meshes():
-    _ = backward_facing_step()
-    _ = blasius_plate()
-    _ = channel_with_cylinder()
+# def test_external_meshes():
+#     _ = backward_facing_step()
+#     _ = blasius_plate()
+#     _ = channel_with_cylinder()
 
 
 if __name__ == "__main__":
