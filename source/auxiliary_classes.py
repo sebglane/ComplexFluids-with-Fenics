@@ -286,6 +286,7 @@ class EquationCoefficientHandler():
     def _compute_equation_coefficients(self):
         assert hasattr(self, "_dimensionless_numbers")
 
+        # hydrodynamic case
         if not any(x in self._dimensionless_numbers for x in ("L", "M", "N", "Th")):
 
             if not hasattr(self, "_equation_coefficients"):
@@ -337,6 +338,7 @@ class EquationCoefficientHandler():
                 coefficients["body_force_term"] = 1.0 / self._dimensionless_numbers["Fr"]**2
             else:
                 coefficients["body_force_term"] = None
+        # micropolar case
         else:
             assert all(x not in self._dimensionless_numbers for x in ("Ek", "Ro"))
 
@@ -356,8 +358,9 @@ class EquationCoefficientHandler():
                                                         self._dimensionless_numbers["Re"]
             else:  # pragma: no cover
                 raise RuntimeError()
-            momentum_coefficients["coupling_term"] = self._dimensionless_numbers["N"]**2 / \
-                (1.0 - self._dimensionless_numbers["N"]**2)
+            if self._dimensionless_numbers["N"] > 0.0:
+                momentum_coefficients["coupling_term"] = self._dimensionless_numbers["N"]**2 / \
+                    (1.0 - self._dimensionless_numbers["N"]**2)
 
             spin_coefficients = self._equation_coefficients["spin"]
             spin_coefficients["convective_term"] = 1.0
@@ -371,7 +374,8 @@ class EquationCoefficientHandler():
                 spin_coefficients["vol_viscous_term"] = 1.0 / self._dimensionless_numbers["M"]**2 / \
                                                         self._dimensionless_numbers["Re"] / \
                                                         self._dimensionless_numbers["Th"]
-            spin_coefficients["coupling_term"] = momentum_coefficients["coupling_term"]
+            if "coupling_term" in momentum_coefficients:
+                spin_coefficients["coupling_term"] = momentum_coefficients["coupling_term"]
 
     def _read_dimensionless_number(self, d, key, alternative_key):
         assert hasattr(self, "_dimensionless_numbers")
@@ -388,7 +392,10 @@ class EquationCoefficientHandler():
             value = d[alternative_key]
         if value is not None:
             assert math.isfinite(value)
-            assert value > 0.0
+            if key not in ("N"):
+                assert value > 0.0
+            else:
+                assert value >= 0.0
             self._dimensionless_numbers[key] = value
 
     def _set_dimensionless_number(self, key, value):

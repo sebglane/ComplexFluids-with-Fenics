@@ -509,44 +509,44 @@ class StationaryProblem(ProblemBase):
         if hasattr(self, "_body_force"):
             self._micropolar_solver.set_body_force(self._body_force)
 
-        try:
-            dlfn.info("Solving problem")
-            self._micropolar_solver.solve()
-            # postprocess solution
-            self.postprocess_solution()
-            # write XDMF-files
-            self._write_xdmf_file()
-            return
-        except RuntimeError:  # pragma: no cover
-            pass
-        except Exception as ex:  # pragma: no cover
-            template = "An unexpected exception of type {0} occurred. " + \
-                        "Arguments:\n{1!r}"
-            message = template.format(type(ex).__name__, ex.args)
-            print(message)
-
-        # parameter continuation
-        dlfn.info("Solving problem with experimental parameter continuation...")  # pragma: no cover
-
-        # mixed logarithmic-linear spacing
-        finalRe = self._coefficient_handler.Re  # pragma: no cover
-        assert finalRe is not None  # pragma: no cover
-        logRange = np.logspace(np.log10(10.0), np.log10(finalRe),
-                               num=8, endpoint=True)  # pragma: no cover
-        linRange = np.linspace(logRange[-2], finalRe,
-                               num=8, endpoint=True)  # pragma: no cover
-        finalRange = np.concatenate((logRange[:-2], linRange))  # pragma: no cover
-        for Re in finalRange:  # pragma: no cover
-            # modify dimensionless numbers
-            self._coefficient_handler.modify_dimensionless_number("Re", Re)
-            self._micropolar_solver.set_equation_coefficients(self._coefficient_handler.equation_coefficients["momentum"],
-                                                              self._coefficient_handler.equation_coefficients["spin"])
-            # solve problem
-            dlfn.info("Solving problem with Re = {0:.2f}".format(Re))
-            self._micropolar_solver.solve()
-
+        # try:
+        dlfn.info("Solving problem")
+        self._micropolar_solver.solve()
         # postprocess solution
-        self.postprocess_solution()  # pragma: no cover
-
+        self.postprocess_solution()
         # write XDMF-files
-        self._write_xdmf_file()  # pragma: no cover
+        self._write_xdmf_file()
+        return
+        # except RuntimeError:  # pragma: no cover
+        #     pass
+        # except Exception as ex:  # pragma: no cover
+        #     template = "An unexpected exception of type {0} occurred. " + \
+        #                 "Arguments:\n{1!r}"
+        #     message = template.format(type(ex).__name__, ex.args)
+        #     print(message)
+
+        # # parameter continuation
+        # dlfn.info("Solving problem with experimental parameter continuation...")  # pragma: no cover
+
+        # # mixed logarithmic-linear spacing
+        # finalRe = self._coefficient_handler.Re  # pragma: no cover
+        # assert finalRe is not None  # pragma: no cover
+        # logRange = np.logspace(np.log10(10.0), np.log10(finalRe),
+        #                        num=8, endpoint=True)  # pragma: no cover
+        # linRange = np.linspace(logRange[-2], finalRe,
+        #                        num=8, endpoint=True)  # pragma: no cover
+        # finalRange = np.concatenate((logRange[:-2], linRange))  # pragma: no cover
+        # for Re in finalRange:  # pragma: no cover
+        #     # modify dimensionless numbers
+        #     self._coefficient_handler.modify_dimensionless_number("Re", Re)
+        #     self._micropolar_solver.set_equation_coefficients(self._coefficient_handler.equation_coefficients["momentum"],
+        #                                                       self._coefficient_handler.equation_coefficients["spin"])
+        #     # solve problem
+        #     dlfn.info("Solving problem with Re = {0:.2f}".format(Re))
+        #     self._micropolar_solver.solve()
+
+        # # postprocess solution
+        # self.postprocess_solution()  # pragma: no cover
+
+        # # write XDMF-files
+        # self._write_xdmf_file()  # pragma: no cover

@@ -858,23 +858,40 @@ class StationarySolverBase(SolverBase):
         # mass balance
         F_mass = -self._divergence_term(sol_v, q) * dV
         # momentum balance
-        F_momentum = (self._convective_term(sol_v, w)
-                      - self._divergence_term(w, sol_p)
-                      + self._viscous_term(sol_v, w)
-                      - self._coupling_term(sol_omega, w)
-                      ) * dV
-        # momentum balance
-        if self._space_dim == 2:
-            F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
-                      + self._viscous_term_spin(sol_omega, alpha)
-                      - self._coupling_term_spin(sol_v, sol_omega, alpha)
-                      ) * dV
+        if self._momentum_coefficients["coupling_term"] is None:
+            F_momentum = (self._convective_term(sol_v, w)
+                          - self._divergence_term(w, sol_p)
+                          + self._viscous_term(sol_v, w)
+                          ) * dV
         else:
-            F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
-                      + self._vol_viscous_term_spin(sol_omega, alpha)
-                      + self._viscous_term_spin(sol_omega, alpha)
-                      - self._coupling_term_spin(sol_v, sol_omega, alpha)
-                      ) * dV
+            F_momentum = (self._convective_term(sol_v, w)
+                          - self._divergence_term(w, sol_p)
+                          + self._viscous_term(sol_v, w)
+                          - self._coupling_term(sol_omega, w)
+                          ) * dV
+        # spin balance
+        if self._space_dim == 2:
+            if self._spin_coefficients["coupling_term"] is None:
+                F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
+                          + self._viscous_term_spin(sol_omega, alpha)
+                          ) * dV
+            else:
+                F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
+                          + self._viscous_term_spin(sol_omega, alpha)
+                          - self._coupling_term_spin(sol_v, sol_omega, alpha)
+                          ) * dV
+        else:
+            if self._spin_coefficients["coupling_term"] is None:
+                F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
+                          + self._vol_viscous_term_spin(sol_omega, alpha)
+                          + self._viscous_term_spin(sol_omega, alpha)
+                          ) * dV
+            else:
+                F_spin = (self._convective_term_spin(sol_v, sol_omega, alpha)
+                          + self._vol_viscous_term_spin(sol_omega, alpha)
+                          + self._viscous_term_spin(sol_omega, alpha)
+                          - self._coupling_term_spin(sol_v, sol_omega, alpha)
+                          ) * dV
         # add boundary tractions
         F_momentum = self._add_boundary_tractions(F_momentum, w)
         # add body force term
@@ -884,22 +901,39 @@ class StationarySolverBase(SolverBase):
 
         # linearization using Picard's method
         J_picard_mass = -self._divergence_term(v, q) * dV
-        J_picard_momentum = (self._picard_linerization_convective_term(sol_v, v, w)
-                             - self._divergence_term(w, p)
-                             + self._viscous_term(v, w)
-                             - self._coupling_term(omega, w)
-                             ) * dV
-        if self._space_dim == 2:
-            J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
-                             + self._viscous_term(omega, alpha)
-                             + self._spin_coefficients["coupling_term"] * self._two * omega * alpha
-                             ) * dV
+        if self._spin_coefficients["coupling_term"] is None:
+            J_picard_momentum = (self._picard_linerization_convective_term(sol_v, v, w)
+                                 - self._divergence_term(w, p)
+                                 + self._viscous_term(v, w)
+                                 ) * dV
         else:
-            J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
-                             + self._vol_viscous_term_spin(omega, alpha)
-                             + self._viscous_term(omega, alpha)
-                             + self._spin_coefficients["coupling_term"] * dot(self._two * omega, alpha)
-                             ) * dV
+            J_picard_momentum = (self._picard_linerization_convective_term(sol_v, v, w)
+                                 - self._divergence_term(w, p)
+                                 + self._viscous_term(v, w)
+                                 - self._coupling_term(omega, w)
+                                 ) * dV
+        if self._space_dim == 2:
+            if self._spin_coefficients["coupling_term"] is None:
+                J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
+                                 + self._viscous_term(omega, alpha)
+                                 ) * dV
+            else:
+                J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
+                                 + self._viscous_term(omega, alpha)
+                                 + self._spin_coefficients["coupling_term"] * self._two * omega * alpha
+                                 ) * dV
+        else:
+            if self._spin_coefficients["coupling_term"] is None:
+                J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
+                                 + self._vol_viscous_term_spin(omega, alpha)
+                                 + self._viscous_term(omega, alpha)
+                                 ) * dV
+            else:
+                J_picard_spin = (self._picard_linerization_convective_term_spin(sol_v, omega, alpha)
+                                 + self._vol_viscous_term_spin(omega, alpha)
+                                 + self._viscous_term(omega, alpha)
+                                 + self._spin_coefficients["coupling_term"] * dot(self._two * omega, alpha)
+                                 ) * dV
         self._J_picard = J_picard_mass + J_picard_momentum + J_picard_spin
         # linearization using Newton's method
         self._J_newton = dlfn.derivative(self._F, self._solution)
