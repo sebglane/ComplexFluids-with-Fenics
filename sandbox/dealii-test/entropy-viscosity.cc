@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -143,6 +144,8 @@ struct RunTimeParameters
 
   unsigned int  problem_size;
 
+  unsigned int  output_frequency;
+
   double        initial_time_step;
 
   double        entropy_stabilization;
@@ -164,6 +167,7 @@ RunTimeParameters::RunTimeParameters()
 :
 fe_degree(1),
 problem_size(200),
+output_frequency(10),
 initial_time_step(1e-3),
 entropy_stabilization(0.25),
 standard_stabilization(0.5),
@@ -219,6 +223,10 @@ void RunTimeParameters::declare_parameters(ParameterHandler &prm)
                     "200",
                     Patterns::Integer(0));
 
+  prm.declare_entry("Output frequency",
+                    "10",
+                    Patterns::Integer(0));
+
   prm.declare_entry("Initial time step",
                     "1e-3",
                     Patterns::Double(0.0));
@@ -258,6 +266,10 @@ void RunTimeParameters::parse_parameters(ParameterHandler &prm)
   problem_size = prm.get_integer("Problem size");
   Assert(problem_size > 0,
          ExcLowerRangeType<unsigned int>(problem_size, 0));
+
+  output_frequency = prm.get_integer("Output frequency");
+  Assert(output_frequency > 0,
+         ExcLowerRangeType<unsigned int>(output_frequency, 0));
 
   initial_time_step = prm.get_double("Initial time step");
   Assert(initial_time_step > 0,
@@ -335,6 +347,7 @@ Stream& operator<<(Stream &stream, const RunTimeParameters &prm)
 
   add_line("FE degree", prm.fe_degree);
   add_line("Problem size", prm.problem_size);
+  add_line("Output frequency", prm.output_frequency);
   add_line("Initial time step", prm.initial_time_step);
   add_line("Start time", prm.start_time);
   add_line("Final time", prm.final_time);
@@ -403,6 +416,8 @@ private:
                            const double                       cell_diameter,
                            const unsigned int                 step_number) const;
 
+  double compute_error(const double time) const;
+
   Vector<double> evaluate_rhs(const double          time,
                               const Vector<double> &old_solution,
                               const double          average_solution_value,
@@ -463,7 +478,9 @@ prm(parameters),
 velocity_function(Tensor<1, 1>({1.0})),
 fe(prm.fe_degree),
 dof_handler(triangulation)
-{}
+{
+  std::cout << prm << std::endl << std::endl;
+}
 
 
 
@@ -475,7 +492,9 @@ prm(parameters),
 velocity_function(Tensor<1, 2>({1.0, 0.0})),
 fe(prm.fe_degree),
 dof_handler(triangulation)
-{}
+{
+  std::cout << prm << std::endl << std::endl;
+}
 
 
 
@@ -487,7 +506,9 @@ prm(parameters),
 velocity_function(Tensor<1, 3>({1.0, 0.0, 0.0})),
 fe(prm.fe_degree),
 dof_handler(triangulation)
-{}
+{
+  std::cout << prm << std::endl << std::endl;
+}
 
 
 
@@ -847,6 +868,30 @@ double EntropyViscosity<dim>::get_cfl_number(const double time_step) const
 
 
 template <int dim>
+double EntropyViscosity<dim>::compute_error(const double time) const
+{
+  AssertThrow(std::abs(std::floor(time) - time) <= 1.0e1 * std::numeric_limits<double>::epsilon(),
+              ExcMessage("Error can only be at multiples of unity."));
+
+  Vector<double>  cellwise_error(triangulation.n_active_cells());
+
+  InitialCondition<dim> exact_solution;
+
+  VectorTools::integrate_difference(dof_handler,
+                                    solution,
+                                    exact_solution,
+                                    cellwise_error,
+                                    QGauss<dim>(fe.get_degree() + 1),
+                                    VectorTools::NormType::L2_norm);
+
+  return (VectorTools::compute_global_error(triangulation,
+                                            cellwise_error,
+                                            VectorTools::NormType::L2_norm));
+}
+
+
+
+template <int dim>
 Vector<double> EntropyViscosity<dim>::evaluate_rhs
 (const double           /* time */,
  const Vector<double>  &evaluation_point,
@@ -1023,6 +1068,11 @@ void EntropyViscosity<dim>::output_results
     }
   }
 
+  static std::filesystem::path output_directory;
+  output_directory = std::filesystem::current_path() / method_name;
+  if (!std::filesystem::exists(output_directory))
+    std::filesystem::create_directory(output_directory);
+
   DataOut<dim>  data_out;
 
   data_out.attach_dof_handler(dof_handler);
@@ -1033,9 +1083,10 @@ void EntropyViscosity<dim>::output_results
   {
     data_out.set_flags(DataOutBase::VtkFlags(time, time_step));
 
-    const std::string filename = "solution_" + method_name + "-" +
-                                 Utilities::int_to_string(time_step, 3) +
-                                 ".vtu";
+    const std::string filename = output_directory /
+                                 std::string("solution-" + method_name + "-" +
+                                             Utilities::int_to_string(time_step, 3) +
+                                             ".vtu");
     std::ofstream output(filename);
     data_out.write_vtu(output);
 
@@ -1047,7 +1098,7 @@ void EntropyViscosity<dim>::output_results
     {
       times_and_names.clear();
       method_name_prev = method_name;
-      pvd_filename     = "solution_" + method_name + ".pvd";
+      pvd_filename = output_directory / std::string("solution-" + method_name + ".pvd");
     }
     times_and_names.emplace_back(time, filename);
 
@@ -1057,9 +1108,10 @@ void EntropyViscosity<dim>::output_results
   {
     data_out.set_flags(DataOutBase::GnuplotFlags());
 
-    const std::string filename = "solution_" + method_name + "-" +
-                                 Utilities::int_to_string(time_step, 3) +
-                                 ".gpl";
+    const std::string filename = output_directory /
+                                 std::string("solution-" + method_name + "-" +
+                                             Utilities::int_to_string(time_step, 3) +
+                                             ".gpl");
 
     std::ofstream output(filename);
     data_out.write_gnuplot(output);
@@ -1075,12 +1127,12 @@ unsigned int EntropyViscosity<dim>::embedded_explicit_method
  const double       final_time,
  const double       initial_time_step)
 {
-  const double coarsen_param = 2.0;
-  const double refine_param  = 0.5;
-  const double minimum_time_step = 1.0e-3 * initial_time_step;
-  const double maximum_time_step = 1.0e6 * initial_time_step;
-  const double refine_tol    = 1e-1;
-  const double coarsen_tol   = 1e-3;
+  const double coarsen_param = 1.2;
+  const double refine_param  = 0.8;
+  const double minimum_time_step = 1.0e-6 * initial_time_step;
+  const double maximum_time_step = 2.0e1 * initial_time_step;
+  const double refine_tol    = 1e-3;
+  const double coarsen_tol   = 1e-6;
 
   apply_initial_condition();
 
@@ -1152,7 +1204,7 @@ unsigned int EntropyViscosity<dim>::embedded_explicit_method
 
     constraint_matrix.distribute(solution);
 
-    if (time.get_step_number() % 100 == 0 || time.is_at_end())
+    if (time.get_step_number() % prm.output_frequency == 0 || time.is_at_end())
       output_results(time.get_current_time(),
                      time.get_step_number(),
                      method);
@@ -1228,7 +1280,7 @@ void EntropyViscosity<dim>::explicit_method
 
     time.advance_time();
 
-    if (time.get_step_number() % 100 == 0 || time.is_at_end())
+    if (time.get_step_number() % prm.output_frequency == 0 || time.is_at_end())
       output_results(time.get_current_time(),
                      time.get_step_number(),
                      method);
@@ -1258,21 +1310,14 @@ void EntropyViscosity<dim>::run()
   std::cout << "CFL number (based on initial time step): " << cfl << std::endl;
 
 
-  std::cout << "Explicit methods:" << std::endl;
-//  explicit_method(TimeStepping::FORWARD_EULER,
-//                  initial_time,
-//                  final_time,
-//                  time_step);
-//  std::cout << "   Forward Euler:            error= "
-//            << solution.l2_norm()
-//            << std::endl;
-//
+  std::cout << std::endl
+            << "Explicit methods:" << std::endl;
   explicit_method(TimeStepping::RK_THIRD_ORDER,
                   initial_time,
                   final_time,
                   time_step);
   std::cout << "   Third order Runge-Kutta:  error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
 
   explicit_method(TimeStepping::RK_CLASSIC_FOURTH_ORDER,
@@ -1280,7 +1325,7 @@ void EntropyViscosity<dim>::run()
                   final_time,
                   time_step);
   std::cout << "   Fourth order Runge-Kutta: error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
   std::cout << std::endl;
 
@@ -1291,7 +1336,7 @@ void EntropyViscosity<dim>::run()
                                      final_time,
                                      time_step);
   std::cout << "   Heun-Euler:               error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
   std::cout << "                   steps performed = "
             << n_steps
@@ -1302,7 +1347,7 @@ void EntropyViscosity<dim>::run()
                                      final_time,
                                      time_step);
   std::cout << "   Bogacki-Shampine:         error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
   std::cout << "                   steps performed = "
             << n_steps
@@ -1313,7 +1358,7 @@ void EntropyViscosity<dim>::run()
                                      final_time,
                                      time_step);
   std::cout << "   Dopri:                    error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
   std::cout << "                   steps performed = "
             << n_steps
@@ -1324,7 +1369,7 @@ void EntropyViscosity<dim>::run()
                                      final_time,
                                      time_step);
   std::cout << "   Fehlberg:                 error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
   std::cout << "                   steps performed = "
             << n_steps
@@ -1335,7 +1380,7 @@ void EntropyViscosity<dim>::run()
                                      final_time,
                                      time_step);
   std::cout << "   Cash-Karp:                error = "
-            << solution.l2_norm()
+            << compute_error(final_time)
             << std::endl;
   std::cout << "                   steps performed = "
             << n_steps
@@ -1354,7 +1399,7 @@ int main(int argc, char *argv[])
     if (argc >= 2)
       parameter_filename = argv[1];
     else
-      parameter_filename = "entropy_viscosity.prm";
+      parameter_filename = "entropy-viscosity.prm";
 
     Guermond::RunTimeParameters parameter_set(parameter_filename);
 
