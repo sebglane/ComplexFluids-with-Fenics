@@ -13,6 +13,7 @@
 #include <deal.II/base/function.h>
 #include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/quadrature_lib.h>
+#include <deal.II/base/table_handler.h>
 #include <deal.II/base/tensor_function.h>
 
 #include <deal.II/grid/grid_generator.h>
@@ -1001,7 +1002,7 @@ template <int dim>
 void EntropyViscosity<dim>::output_results
 (const double                     time,
  const unsigned int               time_step,
- TimeStepping::runge_kutta_method method) const
+ const TimeStepping::runge_kutta_method method) const
 {
   std::string method_name;
 
@@ -1085,7 +1086,7 @@ void EntropyViscosity<dim>::output_results
 
     const std::string filename = output_directory /
                                  std::string("solution-" + method_name + "-" +
-                                             Utilities::int_to_string(time_step, 3) +
+                                             Utilities::int_to_string(time_step, 10) +
                                              ".vtu");
     std::ofstream output(filename);
     data_out.write_vtu(output);
@@ -1110,13 +1111,11 @@ void EntropyViscosity<dim>::output_results
 
     const std::string filename = output_directory /
                                  std::string("solution-" + method_name + "-" +
-                                             Utilities::int_to_string(time_step, 3) +
+                                             Utilities::int_to_string(time_step, 10) +
                                              ".gpl");
-
     std::ofstream output(filename);
     data_out.write_gnuplot(output);
   }
-
 }
 
 
@@ -1148,7 +1147,13 @@ unsigned int EntropyViscosity<dim>::embedded_explicit_method
                                 refine_tol,
                                 coarsen_tol);
 
+  TableHandler  record_output_times;
+  record_output_times.declare_column("step");
+  record_output_times.declare_column("time");
+
   output_results(initial_time, 0, method);
+  record_output_times.add_value("step", 0);
+  record_output_times.add_value("time", initial_time);
 
   DiscreteTime time(initial_time, final_time, initial_time_step);
 
@@ -1205,11 +1210,95 @@ unsigned int EntropyViscosity<dim>::embedded_explicit_method
     constraint_matrix.distribute(solution);
 
     if (time.get_step_number() % prm.output_frequency == 0 || time.is_at_end())
+    {
       output_results(time.get_current_time(),
                      time.get_step_number(),
                      method);
+      record_output_times.add_value("step", time.get_step_number());
+      record_output_times.add_value("time", time.get_current_time());
+    }
 
     time.set_desired_next_step_size(embedded_explicit_runge_kutta.get_status().delta_t_guess);
+  }
+
+  {
+    std::string method_name;
+
+    switch (method)
+    {
+      case TimeStepping::FORWARD_EULER:
+      {
+        method_name = "forward_euler";
+        break;
+      }
+      case TimeStepping::RK_THIRD_ORDER:
+      {
+        method_name = "rk3";
+        break;
+      }
+      case TimeStepping::RK_CLASSIC_FOURTH_ORDER:
+      {
+        method_name = "rk4";
+        break;
+      }
+      case TimeStepping::BACKWARD_EULER:
+      {
+        method_name = "backward_euler";
+        break;
+      }
+      case TimeStepping::IMPLICIT_MIDPOINT:
+      {
+        method_name = "implicit_midpoint";
+        break;
+      }
+      case TimeStepping::SDIRK_TWO_STAGES:
+      {
+        method_name = "sdirk";
+        break;
+      }
+      case TimeStepping::HEUN_EULER:
+      {
+        method_name = "heun_euler";
+        break;
+      }
+      case TimeStepping::BOGACKI_SHAMPINE:
+      {
+        method_name = "bogacki_shampine";
+        break;
+      }
+      case TimeStepping::DOPRI:
+      {
+        method_name = "dopri";
+        break;
+      }
+      case TimeStepping::FEHLBERG:
+      {
+        method_name = "fehlberg";
+        break;
+      }
+      case TimeStepping::CASH_KARP:
+      {
+        method_name = "cash_karp";
+        break;
+      }
+      default:
+      {
+        break;
+      }
+    }
+
+    static std::filesystem::path output_directory;
+    output_directory = std::filesystem::current_path() / method_name;
+    if (!std::filesystem::exists(output_directory))
+      std::filesystem::create_directory(output_directory);
+
+    const std::string filename = output_directory /
+                                 std::string("solution-" + method_name + ".txt");
+
+    std::ofstream out(filename.c_str());
+    record_output_times.write_text(out,
+                                   TableHandler::TextOutputFormat::org_mode_table);
+    out.close();
   }
 
   return time.get_step_number();
@@ -1231,7 +1320,14 @@ void EntropyViscosity<dim>::explicit_method
 
   TimeStepping::ExplicitRungeKutta<Vector<double>> explicit_runge_kutta(method);
 
+  TableHandler  record_output_times;
+  record_output_times.declare_column("step");
+  record_output_times.declare_column("time");
+
   output_results(initial_time, 0, method);
+  record_output_times.add_value("step", 0);
+  record_output_times.add_value("time", initial_time);
+
 
   DiscreteTime time(initial_time, final_time, time_step);
 
@@ -1281,9 +1377,93 @@ void EntropyViscosity<dim>::explicit_method
     time.advance_time();
 
     if (time.get_step_number() % prm.output_frequency == 0 || time.is_at_end())
+    {
       output_results(time.get_current_time(),
                      time.get_step_number(),
                      method);
+      record_output_times.add_value("step", time.get_step_number());
+      record_output_times.add_value("time", time.get_current_time());
+    }
+  }
+
+  {
+    std::string method_name;
+
+    switch (method)
+    {
+      case TimeStepping::FORWARD_EULER:
+      {
+        method_name = "forward_euler";
+        break;
+      }
+      case TimeStepping::RK_THIRD_ORDER:
+      {
+        method_name = "rk3";
+        break;
+      }
+      case TimeStepping::RK_CLASSIC_FOURTH_ORDER:
+      {
+        method_name = "rk4";
+        break;
+      }
+      case TimeStepping::BACKWARD_EULER:
+      {
+        method_name = "backward_euler";
+        break;
+      }
+      case TimeStepping::IMPLICIT_MIDPOINT:
+      {
+        method_name = "implicit_midpoint";
+        break;
+      }
+      case TimeStepping::SDIRK_TWO_STAGES:
+      {
+        method_name = "sdirk";
+        break;
+      }
+      case TimeStepping::HEUN_EULER:
+      {
+        method_name = "heun_euler";
+        break;
+      }
+      case TimeStepping::BOGACKI_SHAMPINE:
+      {
+        method_name = "bogacki_shampine";
+        break;
+      }
+      case TimeStepping::DOPRI:
+      {
+        method_name = "dopri";
+        break;
+      }
+      case TimeStepping::FEHLBERG:
+      {
+        method_name = "fehlberg";
+        break;
+      }
+      case TimeStepping::CASH_KARP:
+      {
+        method_name = "cash_karp";
+        break;
+      }
+      default:
+      {
+        break;
+      }
+    }
+
+    static std::filesystem::path output_directory;
+    output_directory = std::filesystem::current_path() / method_name;
+    if (!std::filesystem::exists(output_directory))
+      std::filesystem::create_directory(output_directory);
+
+    const std::string filename = output_directory /
+                                 std::string("solution-" + method_name + ".txt");
+
+    std::ofstream out(filename.c_str());
+    record_output_times.write_text(out,
+                                   TableHandler::TextOutputFormat::org_mode_table);
+    out.close();
   }
 }
 
