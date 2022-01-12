@@ -13,6 +13,9 @@ For running the program, a docker container could be used.
 **Compile and run the program**
 
 `cd shared/`
+
 `cmake CMakeLists.txt`
+
 `make run`
+
 `python3 plot_solutions.py`
