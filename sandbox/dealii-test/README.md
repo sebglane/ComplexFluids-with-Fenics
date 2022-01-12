@@ -7,6 +7,7 @@ For running the program, a docker container could be used.
 `docker pull dealii/dealii:v9.3.0-focal`
 
 **Start the container and mount the directory**
+
 `docker run -i -t -v $(pwd):/home/dealii/shared/ dealii/dealii:v9.3.0-focal`
 
 **Compile and run the program**
