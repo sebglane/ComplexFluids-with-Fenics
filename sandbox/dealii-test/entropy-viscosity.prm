@@ -1,0 +1,12 @@
+# Listing of Parameters
+# ---------------------
+set Entropy residual computation       = Standard
+set Entropy stabilization coefficient  = 1.0e-2
+set FE degree                          = 2
+set Final time                         = 1.0
+set Initial time step                  = 5.0e-4
+set Problem size                       = 200
+set Standard stabilization coefficient = 1.0e-1
+set Start time                         = 0.0
+set Verbose                            = false
+set Output frequency                   = 10
